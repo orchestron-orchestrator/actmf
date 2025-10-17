@@ -1,0 +1,9 @@
+Container({
+  'test:netinfra': Container({
+    'router': List(['name'], elements=[
+      Container({
+        'name': Leaf('string', 'ams-core-1')
+      })
+    ])
+  })
+})

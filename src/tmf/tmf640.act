@@ -1,0 +1,2132 @@
+import json
+import testing
+import time
+
+import yang
+import yang.gdata
+import yang.gen3
+import yang.schema
+
+extension list[Characteristic] (yang.gen3.YangData):
+    def take_container(self, schema: yang.schema.DContainer, name: str, ns: ?str=None, path: list[yang.gen3.PathElement]=[]) -> ?value:
+        return None
+
+    def take_list(self, schema: yang.schema.DList, name: str, ns: ?str=None, path: list[yang.gen3.PathElement]=[]) -> list[value]:
+        return []
+
+    def take_leaf(self, schema: yang.schema.DLeaf, name: str, ns: ?str=None, path: list[yang.gen3.PathElement]=[]) -> ?(t: str, val: ?value):
+        if isinstance(self, list):
+            for entry in self:
+                if isinstance(entry, Characteristic):
+                    entry_value = entry.value
+                    if entry.name == name and entry_value is not None:
+                        if entry.valueType == schema.type_.name:
+                            return (schema.type_.name, entry.value)
+                        elif entry.valueType == "number" and schema.type_.name in ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64", "decimal64"]:
+                            return (schema.type_.name, entry.value)
+                        elif entry.valueType == "string" and schema.type_.name == "enumeration":
+                            return (schema.type_.name, entry.value)
+                        raise yang.gen3.YangValidationError(path, schema.type_, entry_value)
+
+    def take_leaflist(self, schema: yang.schema.DLeafList, name: str, ns: ?str=None, path: list[yang.gen3.PathElement]=[]) -> list[(t: str, val: ?value)]:
+        return []
+
+def get_json(tmf_spec: dict[str, (keys: list[str], name: str, description: str)], layer_config: yang.gdata.Node, service_id: ?str = None) -> ?dict[str, ?value]:
+    multiple = service_id is None
+    req_sspec_id = None
+    req_service_key = None
+    services_json = []
+
+    if service_id is not None:
+        service_id_parts = service_id.split("__")
+        if len(service_id_parts) != 2:
+            return None
+        req_sspec_id = service_id_parts[0]
+        req_service_key = service_id_parts[1]
+
+    services = layer_config.children["tmf-store"].children["tmf640"].children["service"]
+    if isinstance(services, yang.gdata.List):
+        for s in services.elements:
+            if not multiple and service_id != get_child_str(s, "id"):
+                continue
+            service = Service.from_gdata(s)
+            if not multiple and req_sspec_id != service.serviceSpecification.id:
+                continue
+
+            spec = tmf_spec.get(service.serviceSpecification.id)
+            if spec is not None:
+                if len(spec.keys) > 1:
+                    raise NotImplementedError("Composite YANG keys not implemented yet")
+                key = spec.keys[0]
+                config = layer_config
+                for path_element in service.serviceSpecification.id.split("."):
+                    config = config.children[path_element]
+                if isinstance(config, yang.gdata.List):
+                    if multiple:
+                        for element in config.elements:
+                            add_leaf_properties_to_service_characteristics(element, service)
+                            services_json.append(service.to_json())
+                    else:
+                        for element in config.elements:
+                            if get_child_str(element, key) == req_service_key:
+                                add_leaf_properties_to_service_characteristics(element, service)
+                                return {"service": service.to_json()}
+
+        if multiple:
+            return {"service": services_json}
+
+def json_to_gdata(tmf_spec: dict[str, (keys: list[str], name: str, description: str)], data: dict[str, ?value], top_schema: yang.schema.DRoot) -> (yang.gdata.Node, str):
+    service = Service.from_json(data)
+
+    spec = tmf_spec.get(service.serviceSpecification.id)
+    if spec is not None:
+        if len(spec.keys) > 1:
+            raise NotImplementedError("Composite YANG keys not implemented yet")
+        key = spec.keys[0]
+        schema = top_schema
+        root_path = []
+        ret = yang.gdata.Container()
+        current_node = ret
+        for path_element in service.serviceSpecification.id.split("."):
+            schema = schema.get(path_element)
+            root_path.append("{schema.module}:{schema.name}")
+            if isinstance(schema, yang.schema.DList):
+                current_node.children[path_element] = yang.gdata.List(
+                    schema.key,
+                    [], ns=schema.namespace, module=schema.module
+                )
+                current_node = current_node.children[path_element]
+            elif isinstance(schema, yang.schema.DContainer):
+                current_node.children[path_element] = yang.gdata.Container(ns=schema.namespace, module=schema.module)
+                current_node = current_node.children[path_element]
+            else:
+                raise NotImplementedError(f"Unexpected GData class {schema.gname} in path resolution")
+
+        gd = yang.gen3.from_data(top_schema, top_schema.identities, service.serviceCharacteristic, root_path=root_path)
+        if isinstance(current_node, yang.gdata.List):
+            current_node.elements.append(gd)
+        else:
+            raise NotImplementedError("Unsupported GData Node type for service characteristics insertion")
+
+        try:
+            v = gd.children[key]
+            if isinstance(v, yang.gdata.Leaf):
+                val = v.val
+                if isinstance(val, str):
+                    service.name = val
+                    tmf_id = "{service.serviceSpecification.id}__{val}"
+                else:
+                    raise NotImplementedError(f"Service characteristic key {key} is of type {type(val)}, expected str")
+            else:
+                raise NotImplementedError(f"Service characteristic key {key} is of type {type(v)}, expected Leaf")
+        except KeyError:
+            raise ValueError(f"Service characteristic key {key} not found in transform data")
+
+        service.id = tmf_id
+        service.href = "/tmf-api/ServiceActivationAndConfiguration/v4/service/{tmf_id}"
+        ret.children["tmf-store"] = yang.gdata.Container({
+                "tmf640": yang.gdata.Container({
+                    "service": yang.gdata.List(["id"], [service.to_gdata()])})
+                    }, ns="http://orchestron.org/yang/orchestron-tmf", module="orchestron-tmf")
+
+        return (ret, tmf_id)
+    raise ValueError("Invalid service specification {service.serviceSpecification.id}")
+
+def yang_type_to_tmf_type(yt: str) -> str:
+    if yt == "boolean":
+        return "boolean"
+    elif yt == "string":
+        return "string"
+    elif yt in ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64", "decimal64"]:
+        return "number"
+    elif yt == "enumeration":
+        return "string"
+    raise ValueError("Unsupported YANG type: %s" % yt)
+
+def add_leaf_properties_to_service_characteristics(gd: yang.gdata.Node, service: Service) -> None:
+    if isinstance(gd, yang.gdata.Container):
+        for k, v in gd.children.items():
+            if isinstance(v, yang.gdata.Leaf):
+                for chr in service.serviceCharacteristic:
+                    if chr.name == k:
+                        chr.valueType = yang_type_to_tmf_type(v.t)
+                        chr.value = v.val
+                        break
+
+def get_opt_obj(d: dict[str, ?value], key: str) -> ?dict[str, ?value]:
+    v = d.get(key)
+    if isinstance(v, dict):
+        return v
+
+def get_obj(d: dict[str, ?value], key: str) -> dict[str, ?value]:
+    v = d.get(key)
+    if isinstance(v, dict):
+        return v
+    raise ValueError("Expected object for key " + key)
+
+def get_opt_int(d: dict[str, ?value], key: str) -> ?int:
+    v = d.get(key)
+    if isinstance(v, int):
+        return v
+
+def get_opt_str(d: dict[str, ?value], key: str) -> ?str:
+    v = d.get(key)
+    if isinstance(v, str):
+        return v
+
+def get_str(d: dict[str, ?value], key: str) -> str:
+    v = d.get(key)
+    if isinstance(v, str):
+        return v
+    raise ValueError("Expected string for key " + key)
+
+def get_opt_bool(d: dict[str, ?value], key: str) -> ?bool:
+    v = d.get(key)
+    if isinstance(v, bool):
+        return v
+
+def get_bool(d: dict[str, ?value], key: str) -> bool:
+    v = d.get(key)
+    if isinstance(v, bool):
+        return v
+    raise ValueError("Expected bool for key " + key)
+
+def get_opt_float(d: dict[str, ?value], key: str) -> ?float:
+    v = d.get(key)
+    if isinstance(v, float):
+        return v
+
+def get_opt_value(d: dict[str, ?value], key: str) -> ?value:
+    v = d.get(key)
+    if v is not None:
+        return v
+
+def get_child_value(node: yang.gdata.Node, child_name: str) -> value:
+    child = node.children.get(child_name)
+    if isinstance(child, yang.gdata.Leaf):
+        return child.val
+    raise ValueError("Expected leaf child " + child_name)
+
+def get_child_str(node: yang.gdata.Node, child_name: str) -> str:
+    child = node.children.get(child_name)
+    if isinstance(child, yang.gdata.Leaf):
+        child_val = child.val
+        if isinstance(child_val, str):
+            return child_val
+    raise ValueError("Expected leaf child " + child_name)
+
+def get_opt_child_str(node: yang.gdata.Node, child_name: str) -> ?str:
+    child = node.children.get(child_name)
+    if isinstance(child, yang.gdata.Leaf):
+        child_val = child.val
+        if isinstance(child_val, str):
+            return child_val
+    return None
+
+def get_opt_child_bool(node: yang.gdata.Node, child_name: str) -> ?bool:
+    child = node.children.get(child_name)
+    if isinstance(child, yang.gdata.Leaf):
+        child_val = child.val
+        if isinstance(child_val, bool):
+            return child_val
+    return None
+
+def get_service_specification_ref(d: dict[str, ?value], key: str) -> ServiceSpecificationRef:
+    v = d.get(key)
+    if isinstance(v, dict):
+        return ServiceSpecificationRef.from_json(v)
+    raise ValueError("Expected dict for key " + key)
+
+def get_child_service_specification_ref(node: yang.gdata.Node, child_name: str) -> ServiceSpecificationRef:
+    child = node.children.get(child_name)
+    if isinstance(child, yang.gdata.Container):
+        return ServiceSpecificationRef.from_gdata(child)
+    raise ValueError("Expected container child " + child_name)
+
+def get_service_ref_or_value(d: dict[str, ?value], key: str) -> ServiceRefOrValue:
+    v = d.get(key)
+    if isinstance(v, dict):
+        return ServiceRefOrValue.from_json(v)
+    raise ValueError("Expected dict for key " + key)
+
+def get_child_service_ref_or_value(node: yang.gdata.Node, child_name: str) -> ServiceRefOrValue:
+    child = node.children.get(child_name)
+    if isinstance(child, yang.gdata.Container):
+        return ServiceRefOrValue.from_gdata(child)
+    raise ValueError("Expected container child " + child_name)
+
+def get_opt_time_period(d: dict[str, ?value], key: str) -> ?TimePeriod:
+    v = d.get(key)
+    if isinstance(v, dict):
+        return TimePeriod.from_json(v)
+
+def get_opt_child_time_period(node: yang.gdata.Node, child_name: str) -> ?TimePeriod:
+    child = node.children.get(child_name)
+    if isinstance(child, yang.gdata.Container):
+        return TimePeriod.from_gdata(child)
+    return None
+
+def add_leafs_to_gdata(elements: dict[str, yang.gdata.Node], properties: list[(str, ?value, str)]):
+    for prop_name, prop_value, prop_type in properties:
+        p = prop_value
+        if p is not None:
+            elements[prop_name] = yang.gdata.Leaf(prop_type, p)
+        else:
+            raise ValueError("Property {prop_name} is required for gdata")
+
+def add_opt_leafs_to_gdata(elements: dict[str, yang.gdata.Node], properties: list[(str, ?value, str)]):
+    for prop_name, prop_value, prop_type in properties:
+        p = prop_value
+        if p is not None:
+            elements[prop_name] = yang.gdata.Leaf(prop_type, p)
+
+def get_list(val: ?value) -> list[dict[str, ?value]]:
+    if isinstance(val, list):
+        return val
+    return [] 
+
+def get_yang_list_elements(yl: ?yang.gdata.Node) -> list[yang.gdata.Node]:
+    if isinstance(yl, yang.gdata.List):
+        return yl.elements
+    return []
+
+def get_opt_obj_to_json(obj) -> ?dict[str, ?value]:
+        o = obj
+        if o is None:
+            return None
+        elif isinstance(o, TimePeriod):
+            return o.to_json()
+        elif isinstance(o, ServiceSpecificationRef):
+            return o.to_json()
+        raise Exception("Unsupported type for get_opt_obj_to_json: " + str(type(o)))
+
+def add_opt_obj_to_gdata(elements: dict[str, yang.gdata.Node], key: str, obj):
+    o = obj
+    if isinstance(o, TimePeriod):
+        elements[key] = o.to_gdata()
+    elif isinstance(o, ServiceSpecificationRef):
+        elements[key] = o.to_gdata()
+
+class Service(object):
+    id: ?str
+    href: ?str
+    category: ?str
+    description: ?str
+    endDate: ?str
+    hasStarted: ?bool
+    isBundle: ?bool
+    isServiceEnabled: ?bool
+    isStateful: ?bool
+    name: ?str
+    serviceDate: ?str
+    serviceType: ?str
+    startDate: ?str
+    startMode: ?str
+    feature: list[Feature]
+    note: list[Note]
+    place: list[RelatedPlaceRefOrValue]
+    relatedEntity: list[RelatedEntityRefOrValue]
+    relatedParty: list[RelatedParty]
+    serviceCharacteristic: list[Characteristic]
+    serviceOrderItem: list[RelatedServiceOrderItem]
+    serviceRelationship: list[ServiceRelationship]
+    serviceSpecification: ServiceSpecificationRef
+    state: ?str
+    supportingResource: list[ResourceRef]
+    supportingService: list[ServiceRefOrValue]
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+
+    def __init__(self, id: ?str, href: ?str, category: ?str, description: ?str, endDate: ?str, hasStarted: ?bool, isBundle: ?bool, isServiceEnabled: ?bool, isStateful: ?bool, name: ?str, serviceDate: ?str, serviceType: ?str, startDate: ?str, startMode: ?str, feature: list[Feature], note: list[Note], place: list[RelatedPlaceRefOrValue], relatedEntity: list[RelatedEntityRefOrValue], relatedParty: list[RelatedParty], serviceCharacteristic: list[Characteristic], serviceOrderItem: list[RelatedServiceOrderItem], serviceRelationship: list[ServiceRelationship], serviceSpecification: ServiceSpecificationRef, state: ?str, supportingResource: list[ResourceRef], supportingService: list[ServiceRefOrValue], baseType: ?str, schemaLocation: ?str, type: ?str):
+        self.id = id
+        self.href = href
+        self.category = category
+        self.description = description
+        self.endDate = endDate
+        self.hasStarted = hasStarted if hasStarted is not None else True
+        self.isBundle = isBundle if isBundle is not None else False
+        self.isServiceEnabled = isServiceEnabled if isServiceEnabled is not None else True
+        self.isStateful = isStateful if isStateful is not None else False
+        self.name = name
+        self.serviceDate = serviceDate if serviceDate is not None else str(time.utcnow())
+        self.serviceType = serviceType
+        self.startDate = startDate if startDate is not None else str(time.utcnow())
+        self.startMode = startMode if startMode is not None else "1"
+        self.feature = feature
+        self.note = note
+        self.place = place
+        self.relatedEntity = relatedEntity
+        self.relatedParty = relatedParty
+        self.serviceCharacteristic = serviceCharacteristic
+        self.serviceOrderItem = serviceOrderItem
+        self.serviceRelationship = serviceRelationship
+        self.serviceSpecification = serviceSpecification
+        self.state = state if state is not None else "active"
+        self.supportingResource = supportingResource
+        self.supportingService = supportingService
+        self.baseType = baseType if baseType is not None else "Service"
+        self.schemaLocation = schemaLocation if schemaLocation is not None else "/tmf-api/schema/Service/Service.schema.json"
+        self.type = type if type is not None else "Service"
+
+    @staticmethod
+    def from_json(data: dict[str, ?value]) -> Service:
+        return Service(
+            get_opt_str(data, "id"),
+            get_opt_str(data, "href"),
+            get_opt_str(data, "category"),
+            get_opt_str(data, "description"),
+            get_opt_str(data, "endDate"),
+            get_opt_bool(data, "hasStarted"),
+            get_opt_bool(data, "isBundle"),
+            get_opt_bool(data, "isServiceEnabled"),
+            get_opt_bool(data, "isStateful"),
+            get_opt_str(data, "name"),
+            get_opt_str(data, "serviceDate"),
+            get_opt_str(data, "serviceType"),
+            get_opt_str(data, "startDate"),
+            get_opt_str(data, "startMode"),
+            list(map(Feature.from_json, get_list(data.get("feature")))),
+            list(map(Note.from_json, get_list(data.get("note")))),
+            list(map(RelatedPlaceRefOrValue.from_json, get_list(data.get("place")))),
+            list(map(RelatedEntityRefOrValue.from_json, get_list(data.get("relatedEntity")))),
+            list(map(RelatedParty.from_json, get_list(data.get("relatedParty")))),
+            list(map(Characteristic.from_json, get_list(data.get("serviceCharacteristic")))),
+            list(map(RelatedServiceOrderItem.from_json, get_list(data.get("serviceOrderItem")))),
+            list(map(ServiceRelationship.from_json, get_list(data.get("serviceRelationship")))),
+            get_service_specification_ref(data, "serviceSpecification"),
+            get_opt_str(data, "state"),
+            list(map(ResourceRef.from_json, get_list(data.get("supportingResource")))),
+            list(map(ServiceRefOrValue.from_json, get_list(data.get("supportingService")))),
+            get_opt_str(data, "@baseType"),
+            get_opt_str(data, "@schemaLocation"),
+            get_opt_str(data, "@type")
+        )
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "href": self.href,
+            "category": self.category,
+            "description": self.description,
+            "endDate": self.endDate,
+            "hasStarted": self.hasStarted,
+            "isBundle": self.isBundle,
+            "isServiceEnabled": self.isServiceEnabled,
+            "isStateful": self.isStateful,
+            "name": self.name,
+            "serviceDate": self.serviceDate,
+            "serviceType": self.serviceType,
+            "startDate": self.startDate,
+            "startMode": self.startMode,
+            "feature": [f.to_json() for f in self.feature],
+            "note": [n.to_json() for n in self.note],
+            "place": [p.to_json() for p in self.place],
+            "relatedEntity": [re.to_json() for re in self.relatedEntity],
+            "relatedParty": [rp.to_json() for rp in self.relatedParty],
+            "serviceCharacteristic": [sc.to_json() for sc in self.serviceCharacteristic],
+            "serviceOrderItem": [soi.to_json() for soi in self.serviceOrderItem],
+            "serviceRelationship": [sr.to_json() for sr in self.serviceRelationship],
+            "serviceSpecification": [self.serviceSpecification.to_json()],
+            "state": self.state,
+            "supportingResource": [sres.to_json() for sres in self.supportingResource],
+            "supportingService": [ss.to_json() for ss in self.supportingService],
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type
+        }
+
+    @staticmethod
+    def from_gdata(gd: yang.gdata.Node) -> Service:
+        if isinstance(gd, yang.gdata.Container):
+            return Service(
+                get_child_str(gd, "id"),
+                get_opt_child_str(gd, "href"),
+                get_opt_child_str(gd, "category"),
+                get_opt_child_str(gd, "description"),
+                get_opt_child_str(gd, "endDate"),
+                get_opt_child_bool(gd, "hasStarted"),
+                get_opt_child_bool(gd, "isBundle"),
+                get_opt_child_bool(gd, "isServiceEnabled"),
+                get_opt_child_bool(gd, "isStateful"),
+                get_opt_child_str(gd, "name"),
+                get_opt_child_str(gd, "serviceDate"),
+                get_opt_child_str(gd, "serviceType"),
+                get_opt_child_str(gd, "startDate"),
+                get_opt_child_str(gd, "startMode"),
+                list(map(Feature.from_gdata, get_yang_list_elements(gd.children.get("feature")))),
+                list(map(Note.from_gdata, get_yang_list_elements(gd.children.get("note")))),
+                list(map(RelatedPlaceRefOrValue.from_gdata, get_yang_list_elements(gd.children.get("place")))),
+                list(map(RelatedEntityRefOrValue.from_gdata, get_yang_list_elements(gd.children.get("relatedEntity")))),
+                list(map(RelatedParty.from_gdata, get_yang_list_elements(gd.children.get("relatedParty")))),
+                list(map(Characteristic.from_gdata, get_yang_list_elements(gd.children.get("serviceCharacteristic")))),
+                list(map(RelatedServiceOrderItem.from_gdata, get_yang_list_elements(gd.children.get("serviceOrderItem")))),
+                list(map(ServiceRelationship.from_gdata, get_yang_list_elements(gd.children.get("serviceRelationship")))),
+                get_child_service_specification_ref(gd, "serviceSpecification"),
+                get_opt_child_str(gd, "state"),
+                list(map(ResourceRef.from_gdata, get_yang_list_elements(gd.children.get("supportingResource")))),
+                list(map(ServiceRefOrValue.from_gdata, get_yang_list_elements(gd.children.get("supportingService")))),
+                get_opt_child_str(gd, "baseType"),
+                get_opt_child_str(gd, "schemaLocation"),
+                get_opt_child_str(gd, "type")
+            )
+        raise ValueError("Unsupported gdata node type")
+
+    def to_gdata(self) -> yang.gdata.Node:
+        elements = {}
+        add_leafs_to_gdata(elements, [
+            ("id", self.id, "string")
+        ])
+        add_opt_leafs_to_gdata(elements, [
+            ("href", self.href, "string"),
+            ("category", self.category, "string"),
+            ("description", self.description, "string"),
+            ("endDate", self.endDate, "string"),
+            ("hasStarted", self.hasStarted, "boolean"),
+            ("isBundle", self.isBundle, "boolean"),
+            ("isServiceEnabled", self.isServiceEnabled, "boolean"),
+            ("isStateful", self.isStateful, "boolean"),
+            ("name", self.name, "string"),
+            ("serviceDate", self.serviceDate, "string"),
+            ("serviceType", self.serviceType, "string"),
+            ("startDate", self.startDate, "string"),
+            ("startMode", self.startMode, "string"),
+            ("state", self.state, "string"),
+            ("baseType", self.baseType, "string"),
+            ("schemaLocation", self.schemaLocation, "string"),
+            ("type", self.type, "string")
+        ])
+
+        elements["feature"] = yang.gdata.List(["id"], [f.to_gdata() for f in self.feature])
+        elements["note"] = yang.gdata.List(["id"], [n.to_gdata() for n in self.note])
+        elements["place"] = yang.gdata.List(["id"], [p.to_gdata() for p in self.place])
+        elements["relatedEntity"] = yang.gdata.List(["id"], [re.to_gdata() for re in self.relatedEntity])
+        elements["relatedParty"] = yang.gdata.List(["id"], [rp.to_gdata() for rp in self.relatedParty])
+        elements["serviceCharacteristic"] = yang.gdata.List(["name"], [sc.to_gdata() for sc in self.serviceCharacteristic])
+        elements["serviceOrderItem"] = yang.gdata.List(["id"], [so.to_gdata() for so in self.serviceOrderItem])
+        elements["serviceRelationship"] = yang.gdata.List(["id"], [sr.to_gdata() for sr in self.serviceRelationship])
+        elements["serviceSpecification"] = self.serviceSpecification.to_gdata()
+        elements["supportingResource"] = yang.gdata.List(["id"], [sr.to_gdata() for sr in self.supportingResource])
+        elements["supportingService"] = yang.gdata.List(["id"], [ss.to_gdata() for ss in self.supportingService])
+
+        return yang.gdata.Container(elements)
+
+class ConstraintRef(object):
+    id: ?str
+    href: ?str
+    name: ?str
+    version: ?str
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+    referredType: ?str
+
+    def __init__(self, id: ?str, href: ?str, name: ?str, version: ?str, baseType: ?str, schemaLocation: ?str, type: ?str, referredType: ?str):
+        self.id = id
+        self.href = href
+        self.name = name
+        self.version = version
+        self.baseType = baseType if baseType is not None else "ConstraintRef"
+        self.schemaLocation = schemaLocation if schemaLocation is not None else "/tmf-api/schema/Service/ConstraintRef.schema.json"
+        self.type = type if type is not None else "ConstraintRef"
+        self.referredType = referredType if referredType is not None else "Constraint"
+
+    @staticmethod
+    def from_json(data: dict[str, ?value]) -> ConstraintRef:
+        return ConstraintRef(
+            get_opt_str(data, "id"),
+            get_opt_str(data, "href"),
+            get_opt_str(data, "name"),
+            get_opt_str(data, "version"),
+            get_opt_str(data, "@baseType"),
+            get_opt_str(data, "@schemaLocation"),
+            get_opt_str(data, "@type"),
+            get_opt_str(data, "@referredType")
+        )
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "href": self.href,
+            "name": self.name,
+            "version": self.version,
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type,
+            "@referredType": self.referredType
+        }
+
+    @staticmethod
+    def from_gdata(gd: yang.gdata.Node) -> ConstraintRef:
+        if isinstance(gd, yang.gdata.Container):
+            return ConstraintRef(
+                get_opt_child_str(gd, "id"),
+                get_opt_child_str(gd, "href"),
+                get_opt_child_str(gd, "name"),
+                get_opt_child_str(gd, "version"),
+                get_opt_child_str(gd, "baseType"),
+                get_opt_child_str(gd, "schemaLocation"),
+                get_opt_child_str(gd, "type"),
+                get_opt_child_str(gd, "referredType")
+            )
+        raise ValueError("Unsupported gdata node type")
+
+    def to_gdata(self) -> yang.gdata.Node:
+        elements = {}
+        add_leafs_to_gdata(elements, [
+            ("id", self.id, "string")
+        ])
+        add_opt_leafs_to_gdata(elements, [
+            ("href", self.href, "string"),
+            ("name", self.name, "string"),
+            ("version", self.version, "string"),
+            ("baseType", self.baseType, "string"),
+            ("schemaLocation", self.schemaLocation, "string"),
+            ("type", self.type, "string"),
+            ("referredType", self.referredType, "string")
+        ])
+
+        return yang.gdata.Container(elements)
+
+class FeatureRelationship(object):
+    id: ?str
+    name: ?str
+    relationshipType: ?str
+    validFor: ?TimePeriod
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+
+    def __init__(self, id: ?str, name: ?str, relationshipType: ?str, validFor: ?TimePeriod, baseType: ?str, schemaLocation: ?str, type: ?str):
+        self.id = id
+        self.name = name
+        self.relationshipType = relationshipType
+        self.validFor = validFor
+        self.baseType = baseType if baseType is not None else "FeatureRelationship"
+        self.schemaLocation = schemaLocation if schemaLocation is not None else "/tmf-api/schema/Service/FeatureRelationship.schema.json"
+        self.type = type if type is not None else "FeatureRelationship"
+
+    @staticmethod
+    def from_json(data: dict[str, ?value]) -> FeatureRelationship:
+        return FeatureRelationship(
+            get_opt_str(data, "id"),
+            get_opt_str(data, "name"),
+            get_opt_str(data, "relationshipType"),
+            get_opt_time_period(data, "validFor"),
+            get_opt_str(data, "@baseType"),
+            get_opt_str(data, "@schemaLocation"),
+            get_opt_str(data, "@type")
+        )
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "relationshipType": self.relationshipType,
+            "validFor": get_opt_obj_to_json(self.validFor),
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type
+        }
+
+    @staticmethod
+    def from_gdata(gd: yang.gdata.Node) -> FeatureRelationship:
+        if isinstance(gd, yang.gdata.Container):
+            return FeatureRelationship(
+                get_opt_child_str(gd, "id"),
+                get_opt_child_str(gd, "name"),
+                get_opt_child_str(gd, "relationshipType"),
+                get_opt_child_time_period(gd, "validFor"),
+                get_opt_child_str(gd, "baseType"),
+                get_opt_child_str(gd, "schemaLocation"),
+                get_opt_child_str(gd, "type")
+            )
+        raise ValueError("Unsupported gdata node type")
+
+    def to_gdata(self) -> yang.gdata.Node:
+        elements = {}
+        add_leafs_to_gdata(elements, [
+            ("id", self.id, "string")
+        ])
+        add_opt_leafs_to_gdata(elements, [
+            ("name", self.name, "string"),
+            ("relationshipType", self.relationshipType, "string"),
+            ("baseType", self.baseType, "string"),
+            ("schemaLocation", self.schemaLocation, "string"),
+            ("type", self.type, "string")
+        ])
+        add_opt_obj_to_gdata(elements, "validFor", self.validFor)
+
+        return yang.gdata.Container(elements)
+
+class TimePeriod(object):
+    endDateTime: ?str
+    startDateTime: ?str
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+
+    def __init__(self, endDateTime: ?str, startDateTime: ?str, baseType: ?str, schemaLocation: ?str, type: ?str):
+        self.endDateTime = endDateTime
+        self.startDateTime = startDateTime
+        self.baseType = baseType if baseType is not None else "TimePeriod"
+        self.schemaLocation = schemaLocation if schemaLocation is not None else "/tmf-api/schema/Service/TimePeriod.schema.json"
+        self.type = type if type is not None else "TimePeriod"
+
+    @staticmethod
+    def from_json(data: dict[str, ?value]) -> TimePeriod:
+        return TimePeriod(
+            get_opt_str(data, "endDateTime"),
+            get_opt_str(data, "startDateTime"),
+            get_opt_str(data, "@baseType"),
+            get_opt_str(data, "@schemaLocation"),
+            get_opt_str(data, "@type")
+        )
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "endDateTime": self.endDateTime,
+            "startDateTime": self.startDateTime,
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type
+        }
+
+    @staticmethod
+    def from_gdata(gd: yang.gdata.Node) -> TimePeriod:
+        if isinstance(gd, yang.gdata.Container):
+            return TimePeriod(
+                get_opt_child_str(gd, "endDateTime"),
+                get_opt_child_str(gd, "startDateTime"),
+                get_opt_child_str(gd, "baseType"),
+                get_opt_child_str(gd, "schemaLocation"),
+                get_opt_child_str(gd, "type")
+            )
+        raise ValueError("Unsupported gdata node type")
+
+    def to_gdata(self) -> yang.gdata.Node:
+        elements = {}
+        add_opt_leafs_to_gdata(elements, [
+            ("endDateTime", self.endDateTime, "string"),
+            ("startDateTime", self.startDateTime, "string"),
+            ("baseType", self.baseType, "string"),
+            ("schemaLocation", self.schemaLocation, "string"),
+            ("type", self.type, "string")
+        ])
+
+        return yang.gdata.Container(elements)
+
+class Feature(object):
+    id: ?str
+    isBundle: ?bool
+    isEnabled: ?bool
+    name: ?str
+    constraint: list[ConstraintRef]
+    featureCharacteristic: list[Characteristic]
+    featureRelationship: list[FeatureRelationship]
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+
+    def __init__(self, id: ?str, isBundle: ?bool, isEnabled: ?bool, name: ?str, constraint: list[ConstraintRef], featureCharacteristic: list[Characteristic], featureRelationship: list[FeatureRelationship], baseType: ?str, schemaLocation: ?str, type: ?str):
+        self.id = id
+        self.isBundle = isBundle
+        self.isEnabled = isEnabled
+        self.name = name
+        self.constraint = constraint
+        self.featureCharacteristic = featureCharacteristic
+        self.featureRelationship = featureRelationship
+        self.baseType = baseType if baseType is not None else "Feature"
+        self.schemaLocation = schemaLocation if schemaLocation is not None else "/tmf-api/schema/Service/Feature.schema.json"
+        self.type = type if type is not None else "Feature"
+
+    @staticmethod
+    def from_json(data: dict[str, ?value]) -> Feature:
+        return Feature(
+            get_opt_str(data, "id"),
+            get_opt_bool(data, "isBundle"),
+            get_opt_bool(data, "isEnabled"),
+            get_opt_str(data, "name"),
+            list(map(ConstraintRef.from_json, get_list(data.get("constraint")))),
+            list(map(Characteristic.from_json, get_list(data.get("featureCharacteristic")))),
+            list(map(FeatureRelationship.from_json, get_list(data.get("featureRelationship")))),
+            get_opt_str(data, "@baseType"),
+            get_opt_str(data, "@schemaLocation"),
+            get_opt_str(data, "@type")
+        )
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "isBundle": self.isBundle,
+            "isEnabled": self.isEnabled,
+            "name": self.name,
+            "constraint": [c.to_json() for c in self.constraint],
+            "featureCharacteristic": [fc.to_json() for fc in self.featureCharacteristic],
+            "featureRelationship": [fr.to_json() for fr in self.featureRelationship],
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type
+        }
+
+    @staticmethod
+    def from_gdata(gd: yang.gdata.Node) -> Feature:
+        if isinstance(gd, yang.gdata.Container):
+            return Feature(
+                get_opt_child_str(gd, "id"),
+                get_opt_child_bool(gd, "isBundle"),
+                get_opt_child_bool(gd, "isEnabled"),
+                get_opt_child_str(gd, "name"),
+                list(map(ConstraintRef.from_gdata, get_yang_list_elements(gd.children.get("constraint")))),
+                list(map(Characteristic.from_gdata, get_yang_list_elements(gd.children.get("featureCharacteristic")))),
+                list(map(FeatureRelationship.from_gdata, get_yang_list_elements(gd.children.get("featureRelationship")))),
+                get_opt_child_str(gd, "baseType"),
+                get_opt_child_str(gd, "schemaLocation"),
+                get_opt_child_str(gd, "type")
+            )
+        raise ValueError("Unsupported gdata node type")
+
+    def to_gdata(self) -> yang.gdata.Node:
+        elements = {}
+        add_leafs_to_gdata(elements, [
+            ("id", self.id, "string")
+        ])
+        add_opt_leafs_to_gdata(elements, [
+            ("isBundle", self.isBundle, "boolean"),
+            ("isEnabled", self.isEnabled, "boolean"),
+            ("name", self.name, "string"),
+            ("baseType", self.baseType, "string"),
+            ("schemaLocation", self.schemaLocation, "string"),
+            ("type", self.type, "string")
+        ])
+
+        elements["constraint"] = yang.gdata.List(["id"], [c.to_gdata() for c in self.constraint])
+        elements["featureCharacteristic"] = yang.gdata.List(["name"], [fc.to_gdata() for fc in self.featureCharacteristic])
+        elements["featureRelationship"] = yang.gdata.List(["id"], [fr.to_gdata() for fr in self.featureRelationship])
+
+        return yang.gdata.Container(elements)
+
+class Note(object):
+    id: ?str
+    author: ?str
+    date: ?str
+    text: ?str
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+
+    def __init__(self, id: ?str, author: ?str, date: ?str, text: ?str, baseType: ?str, schemaLocation: ?str, type: ?str):
+        self.id = id
+        self.author = author
+        self.date = date
+        self.text = text
+        self.baseType = baseType if baseType is not None else "Note"
+        self.schemaLocation = schemaLocation if schemaLocation is not None else "/tmf-api/schema/Service/Note.schema.json"
+        self.type = type if type is not None else "Note"
+
+    @staticmethod
+    def from_json(data: dict[str, ?value]) -> Note:
+        return Note(
+            get_opt_str(data, "id"),
+            get_opt_str(data, "author"),
+            get_opt_str(data, "date"),
+            get_opt_str(data, "text"),
+            get_opt_str(data, "@baseType"),
+            get_opt_str(data, "@schemaLocation"),
+            get_opt_str(data, "@type")
+        )
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "author": self.author,
+            "date": self.date,
+            "text": self.text,
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type
+        }
+
+    @staticmethod
+    def from_gdata(gd: yang.gdata.Node) -> Note:
+        if isinstance(gd, yang.gdata.Container):
+            return Note(
+                get_opt_child_str(gd, "id"),
+                get_opt_child_str(gd, "author"),
+                get_opt_child_str(gd, "date"),
+                get_opt_child_str(gd, "text"),
+                get_opt_child_str(gd, "baseType"),
+                get_opt_child_str(gd, "schemaLocation"),
+                get_opt_child_str(gd, "type")
+            )
+        raise ValueError("Unsupported gdata node type")
+
+    def to_gdata(self) -> yang.gdata.Node:
+        elements = {}
+        add_leafs_to_gdata(elements, [
+            ("id", self.id, "string"),
+        ])
+        add_opt_leafs_to_gdata(elements, [
+            ("author", self.author, "string"),
+            ("date", self.date, "string"),
+            ("text", self.text, "string"),
+            ("baseType", self.baseType, "string"),
+            ("schemaLocation", self.schemaLocation, "string"),
+            ("type", self.type, "string")
+        ])
+
+        return yang.gdata.Container(elements)
+
+class RelatedPlaceRefOrValue(object):
+    id: ?str
+    href: ?str
+    name: ?str
+    role: ?str
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+    referredType: ?str
+
+    def __init__(self, id: ?str, href: ?str, name: ?str, role: ?str, baseType: ?str, schemaLocation: ?str, type: ?str, referredType: ?str):
+        self.id = id
+        self.href = href
+        self.name = name
+        self.role = role
+        self.baseType = baseType if baseType is not None else "RelatedPlaceRefOrValue"
+        self.schemaLocation = schemaLocation if schemaLocation is not None else "/tmf-api/schema/Service/RelatedPlaceRefOrValue.schema.json"
+        self.type = type if type is not None else "RelatedPlaceRefOrValue"
+        self.referredType = referredType if referredType is not None else "Place"
+
+    @staticmethod
+    def from_json(data: dict[str, ?value]) -> RelatedPlaceRefOrValue:
+        return RelatedPlaceRefOrValue(
+            get_opt_str(data, "id"),
+            get_opt_str(data, "href"),
+            get_opt_str(data, "name"),
+            get_opt_str(data, "role"),
+            get_opt_str(data, "@baseType"),
+            get_opt_str(data, "@schemaLocation"),
+            get_opt_str(data, "@type"),
+            get_opt_str(data, "@referredType")
+        )
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "href": self.href,
+            "name": self.name,
+            "role": self.role,
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type,
+            "@referredType": self.referredType
+        }
+
+    @staticmethod
+    def from_gdata(gd: yang.gdata.Node) -> RelatedPlaceRefOrValue:
+        if isinstance(gd, yang.gdata.Container):
+            return RelatedPlaceRefOrValue(
+                get_opt_child_str(gd, "id"),
+                get_opt_child_str(gd, "href"),
+                get_opt_child_str(gd, "name"),
+                get_opt_child_str(gd, "role"),
+                get_opt_child_str(gd, "baseType"),
+                get_opt_child_str(gd, "schemaLocation"),
+                get_opt_child_str(gd, "type"),
+                get_opt_child_str(gd, "referredType")
+            )
+        raise ValueError("Unsupported gdata node type")
+
+    def to_gdata(self) -> yang.gdata.Node:
+        elements = {}
+        add_leafs_to_gdata(elements, [
+            ("id", self.id, "string")
+        ])
+        add_opt_leafs_to_gdata(elements, [
+            ("href", self.href, "string"),
+            ("name", self.name, "string"),
+            ("role", self.role, "string"),
+            ("baseType", self.baseType, "string"),
+            ("schemaLocation", self.schemaLocation, "string"),
+            ("type", self.type, "string"),
+            ("referredType", self.referredType, "string")
+        ])
+
+        return yang.gdata.Container(elements)
+
+class RelatedEntityRefOrValue(object):
+    id: ?str
+    href: ?str
+    name: ?str
+    role: ?str
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+    referredType: ?str
+
+    def __init__(self, id: ?str, href: ?str, name: ?str, role: ?str, baseType: ?str, schemaLocation: ?str, type: ?str, referredType: ?str):
+        self.id = id
+        self.href = href
+        self.name = name
+        self.role = role
+        self.baseType = baseType if baseType is not None else "RelatedEntityRefOrValue"
+        self.schemaLocation = schemaLocation if schemaLocation is not None else "/tmf-api/schema/Service/RelatedEntityRefOrValue.schema.json"
+        self.type = type if type is not None else "RelatedEntityRefOrValue"
+        self.referredType = referredType if referredType is not None else "Entity"
+
+    @staticmethod
+    def from_json(data: dict[str, ?value]) -> RelatedEntityRefOrValue:
+        return RelatedEntityRefOrValue(
+            get_opt_str(data, "id"),
+            get_opt_str(data, "href"),
+            get_opt_str(data, "name"),
+            get_opt_str(data, "role"),
+            get_opt_str(data, "@baseType"),
+            get_opt_str(data, "@schemaLocation"),
+            get_opt_str(data, "@type"),
+            get_opt_str(data, "@referredType")
+        )
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "href": self.href,
+            "name": self.name,
+            "role": self.role,
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type,
+            "@referredType": self.referredType
+        }
+    
+    @staticmethod
+    def from_gdata(gd: yang.gdata.Node) -> RelatedEntityRefOrValue:
+        if isinstance(gd, yang.gdata.Container):
+            return RelatedEntityRefOrValue(
+                get_opt_child_str(gd, "id"),
+                get_opt_child_str(gd, "href"),
+                get_opt_child_str(gd, "name"),
+                get_opt_child_str(gd, "role"),
+                get_opt_child_str(gd, "baseType"),
+                get_opt_child_str(gd, "schemaLocation"),
+                get_opt_child_str(gd, "type"),
+                get_opt_child_str(gd, "referredType")
+            )
+        raise ValueError("Unsupported gdata node type")
+
+    def to_gdata(self) -> yang.gdata.Node:
+        elements = {}
+        add_leafs_to_gdata(elements, [
+            ("id", self.id, "string")
+        ])
+        add_opt_leafs_to_gdata(elements, [
+            ("href", self.href, "string"),
+            ("name", self.name, "string"),
+            ("role", self.role, "string"),
+            ("baseType", self.baseType, "string"),
+            ("schemaLocation", self.schemaLocation, "string"),
+            ("type", self.type, "string"),
+            ("referredType", self.referredType, "string")
+        ])
+
+        return yang.gdata.Container(elements)
+
+class RelatedParty(object):
+    id: ?str
+    href: ?str
+    name: ?str
+    role: ?str
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+    referredType: ?str
+
+    def __init__(self, id: ?str, href: ?str, name: ?str, role: ?str, baseType: ?str, schemaLocation: ?str, type: ?str, referredType: ?str):
+        self.id = id
+        self.href = href
+        self.name = name
+        self.role = role
+        self.baseType = baseType if baseType is not None else "RelatedParty"
+        self.schemaLocation = schemaLocation if schemaLocation is not None else "/tmf-api/schema/Service/RelatedParty.schema.json"
+        self.type = type if type is not None else "RelatedParty"
+        self.referredType = referredType if referredType is not None else "Party"
+
+    @staticmethod
+    def from_json(data: dict[str, ?value]) -> RelatedParty:
+        return RelatedParty(
+            get_opt_str(data, "id"),
+            get_opt_str(data, "href"),
+            get_opt_str(data, "name"),
+            get_opt_str(data, "role"),
+            get_opt_str(data, "@baseType"),
+            get_opt_str(data, "@schemaLocation"),
+            get_opt_str(data, "@type"),
+            get_opt_str(data, "@referredType")
+        )
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "href": self.href,
+            "name": self.name,
+            "role": self.role,
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type,
+            "@referredType": self.referredType
+        }
+
+    @staticmethod
+    def from_gdata(gd: yang.gdata.Node) -> RelatedParty:
+        if isinstance(gd, yang.gdata.Container):
+            return RelatedParty(
+                get_opt_child_str(gd, "id"),
+                get_opt_child_str(gd, "href"),
+                get_opt_child_str(gd, "name"),
+                get_opt_child_str(gd, "role"),
+                get_opt_child_str(gd, "baseType"),
+                get_opt_child_str(gd, "schemaLocation"),
+                get_opt_child_str(gd, "type"),
+                get_opt_child_str(gd, "referredType")
+            )
+        raise ValueError("Unsupported gdata node type")
+
+    def to_gdata(self) -> yang.gdata.Node:
+        elements = {}
+        add_leafs_to_gdata(elements, [
+            ("id", self.id, "string")
+        ])
+        add_opt_leafs_to_gdata(elements, [
+            ("href", self.href, "string"),
+            ("name", self.name, "string"),
+            ("role", self.role, "string"),
+            ("baseType", self.baseType, "string"),
+            ("schemaLocation", self.schemaLocation, "string"),
+            ("type", self.type, "string"),
+            ("referredType", self.referredType, "string")
+        ])
+
+        return yang.gdata.Container(elements)
+
+class Characteristic(object):
+    id: str
+    name: str
+    valueType: ?str
+    characteristicRelationship: list[CharacteristicRelationship]
+    value: ?value
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+
+    def __init__(self, id: str, name: str, valueType: ?str, characteristicRelationship: list[CharacteristicRelationship], value: ?value, baseType: ?str, schemaLocation: ?str, type: ?str):
+        self.id = id
+        self.name = name
+        self.valueType = valueType
+        self.characteristicRelationship = characteristicRelationship
+        self.value = value
+        self.baseType = baseType if baseType is not None else "Characteristic"
+        self.schemaLocation = schemaLocation if schemaLocation is not None else "/tmf-api/schema/Service/Characteristic.schema.json"
+        self.type = type if type is not None else "Characteristic"
+
+    @staticmethod
+    def from_json(data: dict[str, ?value]) -> Characteristic:
+        return Characteristic(
+            get_str(data, "id"),
+            get_str(data, "name"),
+            get_opt_str(data, "valueType"),
+            list(map(CharacteristicRelationship.from_json, get_list(data.get("characteristicRelationship")))),
+            get_opt_value(data, "value"),
+            get_opt_str(data, "@baseType"),
+            get_opt_str(data, "@schemaLocation"),
+            get_opt_str(data, "@type")
+        )
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "valueType": self.valueType,
+            "characteristicRelationship": [cr.to_json() for cr in self.characteristicRelationship],
+            "value": self.value,
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type
+        }
+
+    @staticmethod
+    def from_gdata(gd: yang.gdata.Node) -> Characteristic:
+        if isinstance(gd, yang.gdata.Container):
+            return Characteristic(
+                get_child_str(gd, "id"),
+                get_child_str(gd, "name"),
+                None,  # The valueType is derived from the value on the destination leaf
+                list(map(CharacteristicRelationship.from_gdata, get_yang_list_elements(gd.children.get("characteristicRelationship")))),
+                None,   # The value is stored on the destination leaf
+                get_opt_child_str(gd, "baseType"),
+                get_opt_child_str(gd, "schemaLocation"),
+                get_opt_child_str(gd, "type")
+            )
+        raise ValueError("Unsupported gdata node type")
+
+    def to_gdata(self) -> yang.gdata.Node:
+        elements = {}
+        add_leafs_to_gdata(elements, [
+            ("id", self.id, "string"),
+            ("name", self.name, "string")
+        ])
+        add_opt_leafs_to_gdata(elements, [
+            # NOTE: The value and valueType are not stored in the TMF Store
+            # because they are stored on the respective leaf
+            # of the destination transform.
+            ("baseType", self.baseType, "string"),
+            ("schemaLocation", self.schemaLocation, "string"),
+            ("type", self.type, "string")
+        ])
+
+        elements["characteristicRelationship"] = yang.gdata.List(["id"], [cr.to_gdata() for cr in self.characteristicRelationship])
+
+        return yang.gdata.Container(elements)
+
+class CharacteristicRelationship(object):
+    id: ?str
+    relationshipType: ?str
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+
+    def __init__(self, id: ?str, relationshipType: ?str, baseType: ?str, schemaLocation: ?str, type: ?str):
+        self.id = id
+        self.relationshipType = relationshipType
+        self.baseType = baseType if baseType is not None else "CharacteristicRelationship"
+        self.schemaLocation = schemaLocation if schemaLocation is not None else "/tmf-api/schema/Service/CharacteristicRelationship.schema.json"
+        self.type = type if type is not None else "CharacteristicRelationship"
+
+    @staticmethod
+    def from_json(data: dict[str, ?value]) -> CharacteristicRelationship:
+        return CharacteristicRelationship(
+            get_opt_str(data, "id"),
+            get_opt_str(data, "relationshipType"),
+            get_opt_str(data, "@baseType"),
+            get_opt_str(data, "@schemaLocation"),
+            get_opt_str(data, "@type")
+        )
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "relationshipType": self.relationshipType,
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type
+        }
+
+    @staticmethod
+    def from_gdata(gd: yang.gdata.Node) -> CharacteristicRelationship:
+        if isinstance(gd, yang.gdata.Container):
+            return CharacteristicRelationship(
+                get_opt_child_str(gd, "id"),
+                get_opt_child_str(gd, "relationshipType"),
+                get_opt_child_str(gd, "baseType"),
+                get_opt_child_str(gd, "schemaLocation"),
+                get_opt_child_str(gd, "type")
+            )
+        raise ValueError("Unsupported gdata node type")
+
+    def to_gdata(self) -> yang.gdata.Node:
+        elements = {}
+        add_leafs_to_gdata(elements, [
+            ("id", self.id, "string")
+        ])
+        add_opt_leafs_to_gdata(elements, [
+            ("relationshipType", self.relationshipType, "string"),
+            ("baseType", self.baseType, "string"),
+            ("schemaLocation", self.schemaLocation, "string"),
+            ("type", self.type, "string")
+        ])
+
+        return yang.gdata.Container(elements)
+
+class ServiceSpecificationRef(object):
+    id: str
+    href: ?str
+    name: ?str
+    version: ?str
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+    referredType: ?str
+
+    def __init__(self, id: str, href: ?str, name: ?str, version: ?str, baseType: ?str, schemaLocation: ?str, type: ?str, referredType: ?str):
+        self.id = id
+        self.href = href
+        self.name = name
+        self.version = version
+        self.baseType = baseType if baseType is not None else "ServiceSpecificationRef"
+        self.schemaLocation = schemaLocation if schemaLocation is not None else "/tmf-api/schema/Service/ServiceSpecificationRef.schema.json"
+        self.type = type if type is not None else "ServiceSpecificationRef"
+        self.referredType = referredType if referredType is not None else "ServiceSpecification"
+
+    @staticmethod
+    def from_json(data: dict[str, ?value]) -> ServiceSpecificationRef:
+        return ServiceSpecificationRef(
+            get_str(data, "id"),
+            get_opt_str(data, "href"),
+            get_opt_str(data, "name"),
+            get_opt_str(data, "version"),
+            get_opt_str(data, "@baseType"),
+            get_opt_str(data, "@schemaLocation"),
+            get_opt_str(data, "@type"),
+            get_opt_str(data, "@referredType")
+        )
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "href": self.href,
+            "name": self.name,
+            "version": self.version,
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type,
+            "@referredType": self.referredType
+        }
+
+    @staticmethod
+    def from_gdata(gd: yang.gdata.Node) -> ServiceSpecificationRef:
+        if isinstance(gd, yang.gdata.Container):
+            return ServiceSpecificationRef(
+                get_child_str(gd, "id"),
+                get_opt_child_str(gd, "href"),
+                get_opt_child_str(gd, "name"),
+                get_opt_child_str(gd, "version"),
+                get_opt_child_str(gd, "baseType"),
+                get_opt_child_str(gd, "schemaLocation"),
+                get_opt_child_str(gd, "type"),
+                get_opt_child_str(gd, "referredType")
+            )
+        raise ValueError("Unsupported gdata node type")
+
+    def to_gdata(self) -> yang.gdata.Node:
+        elements = {}
+        add_leafs_to_gdata(elements, [
+            ("id", self.id, "string")
+        ])
+        add_opt_leafs_to_gdata(elements, [
+            ("href", self.href, "string"),
+            ("name", self.name, "string"),
+            ("version", self.version, "string"),
+            ("baseType", self.baseType, "string"),
+            ("schemaLocation", self.schemaLocation, "string"),
+            ("type", self.type, "string"),
+            ("referredType", self.referredType, "string")
+        ])
+
+        return yang.gdata.Container(elements)
+
+class ResourceRef(object):
+    id: ?str
+    href: ?str
+    name: ?str
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+    referredType: ?str
+
+    def __init__(self, id: ?str, href: ?str, name: ?str, baseType: ?str, schemaLocation: ?str, type: ?str, referredType: ?str):
+        self.id = id
+        self.href = href
+        self.name = name
+        self.baseType = baseType if baseType is not None else "ResourceRef"
+        self.schemaLocation = schemaLocation if schemaLocation is not None else "/tmf-api/schema/Service/ResourceRef.schema.json"
+        self.type = type if type is not None else "ResourceRef"
+        self.referredType = referredType if referredType is not None else "Resource"
+    
+    @staticmethod
+    def from_json(data: dict[str, ?value]) -> ResourceRef:
+        return ResourceRef(
+            get_opt_str(data, "id"),
+            get_opt_str(data, "href"),
+            get_opt_str(data, "name"),
+            get_opt_str(data, "@baseType"),
+            get_opt_str(data, "@schemaLocation"),
+            get_opt_str(data, "@type"),
+            get_opt_str(data, "@referredType")
+        )
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "href": self.href,
+            "name": self.name,
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type,
+            "@referredType": self.referredType
+        }
+
+    @staticmethod
+    def from_gdata(gd: yang.gdata.Node) -> ResourceRef:
+        if isinstance(gd, yang.gdata.Container):
+            return ResourceRef(
+                get_child_str(gd, "id"),
+                get_opt_child_str(gd, "href"),
+                get_opt_child_str(gd, "name"),
+                get_opt_child_str(gd, "baseType"),
+                get_opt_child_str(gd, "schemaLocation"),
+                get_opt_child_str(gd, "type"),
+                get_opt_child_str(gd, "referredType")
+            )
+        raise ValueError("Unsupported gdata node type")
+
+    def to_gdata(self) -> yang.gdata.Node:
+        elements = {}
+        add_leafs_to_gdata(elements, [
+            ("id", self.id, "string")
+        ])
+        add_opt_leafs_to_gdata(elements, [
+            ("href", self.href, "string"),
+            ("name", self.name, "string"),
+            ("baseType", self.baseType, "string"),
+            ("schemaLocation", self.schemaLocation, "string"),
+            ("type", self.type, "string"),
+            ("referredType", self.referredType, "string")
+        ])
+
+        return yang.gdata.Container(elements)
+
+
+class RelatedServiceOrderItem(object):
+    itemId: ?str
+    role: ?str
+    serviceOrderHref: ?str
+    serviceOrderId: ?str
+    itemAction: ?str
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+    referredType: ?str
+
+    def __init__(self, itemId: ?str, role: ?str, serviceOrderHref: ?str, serviceOrderId: ?str, itemAction: ?str, baseType: ?str, schemaLocation: ?str, type: ?str, referredType: ?str):
+        self.itemId = itemId
+        self.role = role
+        self.serviceOrderHref = serviceOrderHref
+        self.serviceOrderId = serviceOrderId
+        self.itemAction = itemAction
+        self.baseType = baseType if baseType is not None else "RelatedServiceOrderItem"
+        self.schemaLocation = schemaLocation if schemaLocation is not None else "/tmf-api/schema/Service/RelatedServiceOrderItem.schema.json"
+        self.type = type if type is not None else "RelatedServiceOrderItem"
+        self.referredType = referredType if referredType is not None else "ServiceOrderItem"
+
+    @staticmethod
+    def from_json(data: dict[str, ?value]) -> RelatedServiceOrderItem:
+        return RelatedServiceOrderItem(
+            get_opt_str(data, "itemId"),
+            get_opt_str(data, "role"),
+            get_opt_str(data, "serviceOrderHref"),
+            get_opt_str(data, "serviceOrderId"),
+            get_opt_str(data, "itemAction"),
+            get_opt_str(data, "@baseType"),
+            get_opt_str(data, "@schemaLocation"),
+            get_opt_str(data, "@type"),
+            get_opt_str(data, "@referredType")
+        )
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "itemId": self.itemId,
+            "role": self.role,
+            "serviceOrderHref": self.serviceOrderHref,
+            "serviceOrderId": self.serviceOrderId,
+            "itemAction": self.itemAction,
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type,
+            "@referredType": self.referredType
+        }
+
+    @staticmethod
+    def from_gdata(gd: yang.gdata.Node) -> RelatedServiceOrderItem:
+        if isinstance(gd, yang.gdata.Container):
+            return RelatedServiceOrderItem(
+                get_opt_child_str(gd, "itemId"),
+                get_opt_child_str(gd, "role"),
+                get_opt_child_str(gd, "serviceOrderHref"),
+                get_opt_child_str(gd, "serviceOrderId"),
+                get_opt_child_str(gd, "itemAction"),
+                get_opt_child_str(gd, "baseType"),
+                get_opt_child_str(gd, "schemaLocation"),
+                get_opt_child_str(gd, "type"),
+                get_opt_child_str(gd, "referredType")
+            )
+        raise ValueError("Unsupported gdata node type")
+
+    def to_gdata(self) -> yang.gdata.Node:
+        elements = {}
+        add_leafs_to_gdata(elements, [
+            ("itemId", self.itemId, "string")
+        ])
+        add_opt_leafs_to_gdata(elements, [
+            ("role", self.role, "string"),
+            ("serviceOrderHref", self.serviceOrderHref, "string"),
+            ("serviceOrderId", self.serviceOrderId, "string"),
+            ("itemAction", self.itemAction, "string"),
+            ("baseType", self.baseType, "string"),
+            ("schemaLocation", self.schemaLocation, "string"),
+            ("type", self.type, "string"),
+            ("referredType", self.referredType, "string")
+        ])
+
+        return yang.gdata.Container(elements)
+
+
+class ServiceRelationship(object):
+    relationshipType: ?str
+    serviceRelationshipCharacteristic: list[Characteristic]
+    service: ServiceRefOrValue
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+
+    def __init__(self, relationshipType: ?str, serviceRelationshipCharacteristic: list[Characteristic], service: ServiceRefOrValue, baseType: ?str, schemaLocation: ?str, type: ?str):
+        self.relationshipType = relationshipType
+        self.serviceRelationshipCharacteristic = serviceRelationshipCharacteristic
+        self.service = service
+        self.baseType = baseType if baseType is not None else "ServiceRelationship"
+        self.schemaLocation = schemaLocation if schemaLocation is not None else "/tmf-api/schema/Service/ServiceRelationship.schema.json"
+        self.type = type if type is not None else "ServiceRelationship"
+
+    @staticmethod
+    def from_json(data: dict[str, ?value]) -> ServiceRelationship:
+        return ServiceRelationship(
+            get_opt_str(data, "relationshipType"),
+            list(map(Characteristic.from_json, get_list(data.get("serviceRelationshipCharacteristic")))),
+            get_service_ref_or_value(data, "service"),
+            get_opt_str(data, "@baseType"),
+            get_opt_str(data, "@schemaLocation"),
+            get_opt_str(data, "@type")
+        )
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "relationshipType": self.relationshipType,
+            "serviceRelationshipCharacteristic": [src.to_json() for src in self.serviceRelationshipCharacteristic],
+            "service": self.service.to_json(),
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type
+        }
+
+    @staticmethod
+    def from_gdata(gd: yang.gdata.Node) -> ServiceRelationship:
+        if isinstance(gd, yang.gdata.Container):
+            return ServiceRelationship(
+                get_opt_child_str(gd, "relationshipType"),
+                list(map(Characteristic.from_gdata, get_yang_list_elements(gd.children.get("serviceRelationshipCharacteristic")))),
+                get_child_service_ref_or_value(gd, "service"),
+                get_opt_child_str(gd, "baseType"),
+                get_opt_child_str(gd, "schemaLocation"),
+                get_opt_child_str(gd, "type")
+            )
+        raise ValueError("Unsupported gdata node type")
+
+    def to_gdata(self) -> yang.gdata.Node:
+        elements = {}
+        add_opt_leafs_to_gdata(elements, [
+            ("relationshipType", self.relationshipType, "string"),
+            ("baseType", self.baseType, "string"),
+            ("schemaLocation", self.schemaLocation, "string"),
+            ("type", self.type, "string")
+        ])
+
+        elements["serviceRelationshipCharacteristic"] = yang.gdata.List(["id"], [src.to_gdata() for src in self.serviceRelationshipCharacteristic])
+        elements["service"] = self.service.to_gdata()
+
+        return yang.gdata.Container(elements)
+
+class ServiceRefOrValue(object):
+    id: ?str
+    href: ?str
+    category: ?str
+    description: ?str
+    endDate: ?str
+    hasStarted: ?bool
+    isBundle: ?bool
+    isServiceEnabled: ?bool
+    isStateful: ?bool
+    name: ?str
+    serviceDate: ?str
+    serviceType: ?str
+    startDate: ?str
+    startMode: ?str
+    feature: list[Feature]
+    note: list[Note]
+    place: list[RelatedPlaceRefOrValue]
+    relatedEntity: list[RelatedEntityRefOrValue]
+    relatedParty: list[RelatedParty]
+    serviceCharacteristic: list[Characteristic]
+    serviceOrderItem: list[RelatedServiceOrderItem]
+    serviceRelationship: list[ServiceRelationship]
+    serviceSpecification: ?ServiceSpecificationRef
+    state: ?str
+    supportingResource: list[ResourceRef]
+    supportingService: list[ServiceRefOrValue]
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+    referredType: ?str
+
+    def __init__(self, id: ?str, href: ?str, category: ?str, description: ?str, endDate: ?str, hasStarted: ?bool, isBundle: ?bool, isServiceEnabled: ?bool, isStateful: ?bool, name: ?str, serviceDate: ?str, serviceType: ?str, startDate: ?str, startMode: ?str, feature: list[Feature], note: list[Note], place: list[RelatedPlaceRefOrValue], relatedEntity: list[RelatedEntityRefOrValue], relatedParty: list[RelatedParty], serviceCharacteristic: list[Characteristic], serviceOrderItem: list[RelatedServiceOrderItem], serviceRelationship: list[ServiceRelationship], serviceSpecification: ?ServiceSpecificationRef, state: ?str, supportingResource: list[ResourceRef], supportingService: list[ServiceRefOrValue], baseType: ?str, schemaLocation: ?str, type: ?str, referredType: ?str):
+        self.id = id
+        self.href = href
+        self.category = category
+        self.description = description
+        self.endDate = endDate
+        self.hasStarted = hasStarted
+        self.isBundle = isBundle
+        self.isServiceEnabled = isServiceEnabled
+        self.isStateful = isStateful
+        self.name = name
+        self.serviceDate = serviceDate
+        self.serviceType = serviceType
+        self.startDate = startDate
+        self.startMode = startMode
+        self.feature = feature
+        self.note = note
+        self.place = place
+        self.relatedEntity = relatedEntity
+        self.relatedParty = relatedParty
+        self.serviceCharacteristic = serviceCharacteristic
+        self.serviceOrderItem = serviceOrderItem
+        self.serviceRelationship = serviceRelationship
+        self.serviceSpecification = serviceSpecification
+        self.state = state
+        self.supportingResource = supportingResource
+        self.supportingService = supportingService
+        self.baseType = baseType if baseType is not None else "ServiceRefOrValue"
+        self.schemaLocation = schemaLocation if schemaLocation is not None else "/tmf-api/schema/Service/ServiceRefOrValue.schema.json"
+        self.type = type if type is not None else "ServiceRefOrValue"
+        self.referredType = referredType if referredType is not None else "Service"
+
+    @staticmethod
+    def from_json(data: dict[str, ?value]) -> ServiceRefOrValue:
+
+        service_specification = None
+        sspec = data.get("serviceSpecification")
+        if isinstance(sspec, dict):
+            service_specification = ServiceSpecificationRef.from_json(sspec)
+
+        return ServiceRefOrValue(
+            get_opt_str(data, "id"),
+            get_opt_str(data, "href"),
+            get_opt_str(data, "category"),
+            get_opt_str(data, "description"),
+            get_opt_str(data, "endDate"),
+            get_opt_bool(data, "hasStarted"),
+            get_opt_bool(data, "isBundle"),
+            get_opt_bool(data, "isServiceEnabled"),
+            get_opt_bool(data, "isStateful"),
+            get_opt_str(data, "name"),
+            get_opt_str(data, "serviceDate"),
+            get_opt_str(data, "serviceType"),
+            get_opt_str(data, "startDate"),
+            get_opt_str(data, "startMode"),
+            list(map(Feature.from_json, get_list(data.get("feature")))),
+            list(map(Note.from_json, get_list(data.get("note")))),
+            list(map(RelatedPlaceRefOrValue.from_json, get_list(data.get("place")))),
+            list(map(RelatedEntityRefOrValue.from_json, get_list(data.get("relatedEntity")))),
+            list(map(RelatedParty.from_json, get_list(data.get("relatedParty")))),
+            list(map(Characteristic.from_json, get_list(data.get("serviceCharacteristic")))),
+            list(map(RelatedServiceOrderItem.from_json, get_list(data.get("serviceOrderItem")))),
+            list(map(ServiceRelationship.from_json, get_list(data.get("serviceRelationship")))),
+            service_specification,
+            get_opt_str(data, "state"),
+            list(map(ResourceRef.from_json, get_list(data.get("supportingResource")))),
+            list(map(ServiceRefOrValue.from_json, get_list(data.get("supportingService")))),
+            get_opt_str(data, "@baseType"),
+            get_opt_str(data, "@schemaLocation"),
+            get_opt_str(data, "@type"),
+            get_opt_str(data, "@referredType")
+        )
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "href": self.href,
+            "category": self.category,
+            "description": self.description,
+            "endDate": self.endDate,
+            "hasStarted": self.hasStarted,
+            "isBundle": self.isBundle,
+            "isServiceEnabled": self.isServiceEnabled,
+            "isStateful": self.isStateful,
+            "name": self.name,
+            "serviceDate": self.serviceDate,
+            "serviceType": self.serviceType,
+            "startDate": self.startDate,
+            "startMode": self.startMode,
+            "feature": [f.to_json() for f in self.feature],
+            "note": [n.to_json() for n in self.note],
+            "place": [n.to_json() for n in self.place],
+            "relatedEntity": [re.to_json() for re in self.relatedEntity],
+            "relatedParty": [rp.to_json() for rp in self.relatedParty],
+            "serviceCharacteristic": [sc.to_json() for sc in self.serviceCharacteristic],
+            "serviceOrderItem": [soi.to_json() for soi in self.serviceOrderItem],
+            "serviceRelationship": [sr.to_json() for sr in self.serviceRelationship],
+            "serviceSpecification": get_opt_obj_to_json(self.serviceSpecification),
+            "state": self.state,
+            "supportingResource": [sres.to_json() for sres in self.supportingResource],
+            "supportingService": [ss.to_json() for ss in self.supportingService],
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type,
+        }
+
+
+    @staticmethod
+    def from_gdata(gd: yang.gdata.Node) -> ServiceRefOrValue:
+        if isinstance(gd, yang.gdata.Container):
+            return ServiceRefOrValue(
+                get_opt_child_str(gd, "id"),
+                get_opt_child_str(gd, "href"),
+                get_opt_child_str(gd, "category"),
+                get_opt_child_str(gd, "description"),
+                get_opt_child_str(gd, "endDate"),
+                get_opt_child_bool(gd, "hasStarted"),
+                get_opt_child_bool(gd, "isBundle"),
+                get_opt_child_bool(gd, "isServiceEnabled"),
+                get_opt_child_bool(gd, "isStateful"),
+                get_opt_child_str(gd, "name"),
+                get_opt_child_str(gd, "serviceDate"),
+                get_opt_child_str(gd, "serviceType"),
+                get_opt_child_str(gd, "startDate"),
+                get_opt_child_str(gd, "startMode"),
+                list(map(Feature.from_gdata, get_yang_list_elements(gd.children.get("feature")))),
+                list(map(Note.from_gdata, get_yang_list_elements(gd.children.get("note")))),
+                list(map(RelatedPlaceRefOrValue.from_gdata, get_yang_list_elements(gd.children.get("place")))),
+                list(map(RelatedEntityRefOrValue.from_gdata, get_yang_list_elements(gd.children.get("relatedEntity")))),
+                list(map(RelatedParty.from_gdata, get_yang_list_elements(gd.children.get("relatedParty")))),
+                list(map(Characteristic.from_gdata, get_yang_list_elements(gd.children.get("serviceCharacteristic")))),
+                list(map(RelatedServiceOrderItem.from_gdata, get_yang_list_elements(gd.children.get("serviceOrderItem")))),
+                list(map(ServiceRelationship.from_gdata, get_yang_list_elements(gd.children.get("serviceRelationship")))),
+                get_child_service_specification_ref(gd, "serviceSpecification"),
+                get_opt_child_str(gd, "state"),
+                list(map(ResourceRef.from_gdata, get_yang_list_elements(gd.children.get("supportingResource")))),
+                list(map(ServiceRefOrValue.from_gdata, get_yang_list_elements(gd.children.get("supportingService")))),
+                get_opt_child_str(gd, "baseType"),
+                get_opt_child_str(gd, "schemaLocation"),
+                get_opt_child_str(gd, "type"),
+                get_opt_child_str(gd, "referredType")
+            )
+        raise ValueError("Unsupported gdata node type")
+
+    def to_gdata(self) -> yang.gdata.Node:
+        elements = {}
+        add_leafs_to_gdata(elements, [
+            ("id", self.id, "string")
+        ])
+        add_opt_leafs_to_gdata(elements, [
+            ("href", self.href, "string"),
+            ("category", self.category, "string"),
+            ("description", self.description, "string"),
+            ("endDate", self.endDate, "string"),
+            ("hasStarted", self.hasStarted, "boolean"),
+            ("isBundle", self.isBundle, "boolean"),
+            ("isServiceEnabled", self.isServiceEnabled, "boolean"),
+            ("isStateful", self.isStateful, "boolean"),
+            ("name", self.name, "string"),
+            ("serviceDate", self.serviceDate, "string"),
+            ("serviceType", self.serviceType, "string"),
+            ("startDate", self.startDate, "string"),
+            ("startMode", self.startMode, "string"),
+            ("state", self.state, "string"),
+            ("baseType", self.baseType, "string"),
+            ("schemaLocation", self.schemaLocation, "string"),
+            ("type", self.type, "string")
+        ])
+        add_opt_obj_to_gdata(elements, "serviceSpecification", self.serviceSpecification)
+
+        elements["feature"] = yang.gdata.List(["id"], [f.to_gdata() for f in self.feature])
+        elements["note"] = yang.gdata.List(["id"], [n.to_gdata() for n in self.note])
+        elements["place"] = yang.gdata.List(["id"], [p.to_gdata() for p in self.place])
+        elements["relatedEntity"] = yang.gdata.List(["id"], [re.to_gdata() for re in self.relatedEntity])
+        elements["relatedParty"] = yang.gdata.List(["id"], [rp.to_gdata() for rp in self.relatedParty])
+        elements["serviceCharacteristic"] = yang.gdata.List(["id"], [sc.to_gdata() for sc in self.serviceCharacteristic])
+        elements["serviceOrderItem"] = yang.gdata.List(["itemId"], [soi.to_gdata() for soi in self.serviceOrderItem])
+        elements["serviceRelationship"] = yang.gdata.List(["id"], [sr.to_gdata() for sr in self.serviceRelationship])
+        elements["supportingResource"] = yang.gdata.List(["id"], [sres.to_gdata() for sres in self.supportingResource])
+        elements["supportingService"] = yang.gdata.List(["id"], [ss.to_gdata() for ss in self.supportingService])
+
+        return yang.gdata.Container(elements)
+
+def _test_tmf640_mobile_service():
+    test_tmf_payload = {
+        "category": "MobileService",
+        "description": "Mobile Line ",
+        "feature": [
+            {
+                "id": "1",
+                "isBundle": False,
+                "isEnabled": True,
+                "name": "Voice",
+                "featureCharacteristic": [
+                    {
+                        "id": "1",
+                        "name": "VoiceFeatureCharacteristic",
+                        "valueType": "object",
+                        "value": [
+                            {
+                                "voiceStandard": "enable",
+                                "voWifi": "disable",
+                                "roaming": "enable",
+                                "@schemaLocation": ".../serviceSpecification/11/featureSpecification/1/VoiceFeatureCharacteristic.json",
+                                "@type": "VoiceFeatureCharacteristic"
+                            }
+                        ],
+                        "@type": "FeatureCharacteristic"
+                    }
+                ],
+                "@type": "Feature"
+            },
+            {
+                "id": "2",
+                "isEnabled": False,
+                "name": "Data",
+                "@type": "Feature",
+                "featureCharacteristic": [
+                    {
+                        "id": "75",
+                        "name": "isGreen",
+                        "valueType": "string",
+                        "value": "enable"
+                    }
+                ]
+            },
+            {
+                "id": "3",
+                "isEnabled": True,
+                "name": "Messaging",
+                "featureCharacteristic": [
+                    {
+                        "id": "74",
+                        "name": "incomingSMS",
+                        "valueType": "string",
+                        "value": "enable"
+                    },
+                    {
+                        "id": "73",
+                        "name": "outgoingSMS",
+                        "valueType": "string",
+                        "value": "enable"
+                    }
+                ],
+                "@type": "Feature"
+            }
+        ],
+        "relatedParty": [
+            {
+                "id": "78",
+                "name": "TMF Telco",
+                "role": "Service Provider",
+                "@referredType": "Organization"
+            },
+            {
+                "id": "12",
+                "name": "Jean Pontus",
+                "role": "user",
+                "@referredType": "Individual"
+            }
+        ],
+        "serviceCharacteristic": [
+            {
+                "id": "89",
+                "name": "MSISDN",
+                "valueType": "string",
+                "value": "415-275-7439"
+            }
+        ],
+        "serviceSpecification": {
+            "id": "cfs45",
+            "name": "c_Mobile",
+            "@type": "serviceSpecification",
+            "@referredType": "ServiceSpecification"
+        },
+        "state": "active",
+        "supportingService": [
+            {
+                "serviceSpecification": {
+                    "id": "cfs89",
+                    "href": ".../serviceCatalog/v4/serviceSpecification/cfs89",
+                    "name": "c_MobileSupport",
+                    "@type": "serviceSpecification",
+                    "@referredType": "ServiceSpecification"
+                },
+                "serviceCharacteristic": [
+                    {
+                        "id": "sd-8",
+                        "name": "IMSI",
+                        "valueType": "string",
+                        "value": "228 01 21 76510739 "
+                    }
+                ],
+                "state": "active",
+                "@type": "Service"
+            },
+            {
+                "id": "741-853",
+                "href": "http://serverlocation:port/serviceActivationConfiguration/v4/service/741-853",
+                "@referredType": "Service",
+                "@type": "ServiceRef"
+            }
+        ],
+        "@type": "Service"
+    }
+    service = Service.from_json(test_tmf_payload)
+    testing.assertEqual(service.id, None)
+    testing.assertEqual(service.name, None)
+    testing.assertEqual(service.category, "MobileService")
+    testing.assertEqual(service.description, "Mobile Line ")
+    f0 = service.feature[0]
+    testing.assertEqual(f0.id, "1")
+    testing.assertEqual(f0.isBundle, False)
+    testing.assertEqual(f0.isEnabled, True)
+    testing.assertEqual(f0.name, "Voice")
+    testing.assertEqual(len(f0.featureCharacteristic), 1)
+    fc0 = f0.featureCharacteristic[0]
+    testing.assertEqual(fc0.id, "1")
+    testing.assertEqual(fc0.name, "VoiceFeatureCharacteristic")
+    testing.assertEqual(fc0.valueType, "object")
+    f1 = service.feature[1]
+    testing.assertEqual(f1.id, "2")
+    testing.assertEqual(f1.isEnabled, False)
+    testing.assertEqual(f1.name, "Data")
+    testing.assertEqual(len(f1.featureCharacteristic), 1)
+    fc1 = f1.featureCharacteristic[0]
+    testing.assertEqual(fc1.id, "75")
+    testing.assertEqual(fc1.name, "isGreen")
+    testing.assertEqual(fc1.valueType, "string")
+    f2 = service.feature[2]
+    testing.assertEqual(f2.id, "3")
+    testing.assertEqual(f2.isEnabled, True)
+    testing.assertEqual(f2.name, "Messaging")
+    testing.assertEqual(len(f2.featureCharacteristic), 2)
+    fc2_0 = f2.featureCharacteristic[0]
+    testing.assertEqual(fc2_0.id, "74")
+    testing.assertEqual(fc2_0.name, "incomingSMS")
+    testing.assertEqual(fc2_0.valueType, "string")
+    fc2_1 = f2.featureCharacteristic[1]
+    testing.assertEqual(fc2_1.id, "73")
+    testing.assertEqual(fc2_1.name, "outgoingSMS")
+    testing.assertEqual(fc2_1.valueType, "string")
+    testing.assertEqual(len(service.relatedParty), 2)
+    rp0 = service.relatedParty[0]
+    testing.assertEqual(rp0.id, "78")
+    testing.assertEqual(rp0.name, "TMF Telco")
+    testing.assertEqual(rp0.role, "Service Provider")
+    testing.assertEqual(rp0.referredType, "Organization")
+    rp1 = service.relatedParty[1]
+    testing.assertEqual(rp1.id, "12")
+    testing.assertEqual(rp1.name, "Jean Pontus")
+    testing.assertEqual(rp1.role, "user")
+    testing.assertEqual(rp1.referredType, "Individual")
+    testing.assertEqual(len(service.serviceCharacteristic), 1)
+    testing.assertEqual(service.serviceCharacteristic[0].name, "MSISDN")
+    testing.assertEqual(service.serviceCharacteristic[0].valueType, "string")
+    sspec = service.serviceSpecification
+    if sspec is not None:
+        testing.assertEqual(sspec.id, "cfs45")
+        testing.assertEqual(sspec.name, "c_Mobile")
+        testing.assertEqual(sspec.type, "serviceSpecification")
+        testing.assertEqual(sspec.referredType, "ServiceSpecification")
+    testing.assertEqual(service.state, "active")
+    testing.assertEqual(len(service.supportingService), 2)
+    ss0 = service.supportingService[0]
+    ss0_sspec = ss0.serviceSpecification
+    if ss0_sspec is not None:
+        testing.assertEqual(ss0_sspec.id, "cfs89")
+        testing.assertEqual(ss0_sspec.href, ".../serviceCatalog/v4/serviceSpecification/cfs89")
+        testing.assertEqual(ss0_sspec.name, "c_MobileSupport")
+        testing.assertEqual(ss0_sspec.type, "serviceSpecification")
+        testing.assertEqual(ss0_sspec.referredType, "ServiceSpecification")
+    testing.assertEqual(len(ss0.serviceCharacteristic), 1)
+    ss0_sc0 = ss0.serviceCharacteristic[0]
+    testing.assertEqual(ss0_sc0.id, "sd-8")
+    testing.assertEqual(ss0_sc0.name, "IMSI")
+    testing.assertEqual(ss0_sc0.valueType, "string")
+    testing.assertEqual(ss0.state, "active")
+    ss1 = service.supportingService[1]
+    testing.assertEqual(ss1.id, "741-853")
+    testing.assertEqual(ss1.href, "http://serverlocation:port/serviceActivationConfiguration/v4/service/741-853")
+    testing.assertEqual(ss1.referredType, "Service")
+    testing.assertEqual(ss1.type, "ServiceRef")
+    testing.assertEqual(service.type, "Service")
+
+def _test_netinfra_router():
+    test_tmf_payload = {
+        "serviceCharacteristic": [
+            {
+                "id": "name",
+                "name": "name",
+                "valueType": "string",
+                "value": "ams-core-1"
+            }
+        ],
+        "serviceSpecification": {
+            "id": "spec1",
+        }
+    }
+
+    yang_schema = r"""module test {
+    yang-version "1.1";
+    namespace "http://example.com/test";
+    prefix "tst";
+
+    container netinfra {
+        list router {
+            key "name";
+            leaf name {
+                type string;
+            }
+        }
+    }
+}
+    """
+
+    service = Service.from_json(test_tmf_payload)
+    s = yang.compile([yang_schema])
+    gd = yang.gen3.from_data(s, s.identities, service.serviceCharacteristic, root_path=["test:netinfra", "router"])
+    r = yang.gdata.Container({
+        "test:netinfra": yang.gdata.Container({
+            "router": yang.gdata.List(["name"], [gd])})
+    })
+    return r.prsrc()
+
+def _test_characteristic_type_mismatch():
+    test_tmf_payload = {
+        "serviceCharacteristic": [
+            {
+                "id": "leaf1",
+                "name": "leaf1",
+                "valueType": "string",
+                "value": "415-275-7439"
+            }
+        ],
+        "serviceSpecification": {
+            "id": "spec1",
+        }
+    }
+
+    yang_schema = r"""module test {
+    yang-version "1.1";
+    namespace "http://example.com/test";
+    prefix "tst";
+
+    leaf leaf1 {
+        type int32;
+    }
+}
+    """
+
+    service = Service.from_json(test_tmf_payload)
+    s = yang.compile([yang_schema])
+    try:
+        gd = yang.gen3.from_data(s, s.identities, service.serviceCharacteristic)
+    except yang.gen3.YangValidationError as exc:
+        testing.assertEqual("Invalid value at /: '415-275-7439' - expected int32", str(exc), "Expected YangValidationError")
+        return
+    testing.error("Expected YangValidationError")
+
+def _test_characteristic_number():
+    test_tmf_payload = {
+        "serviceCharacteristic": [
+            {
+                "id": "leaf1",
+                "name": "leaf1",
+                "valueType": "number",
+                "value": 55
+            }
+        ],
+        "serviceSpecification": {
+            "id": "spec1",
+        }
+    }
+
+    yang_schema = r"""module test {
+    yang-version "1.1";
+    namespace "http://example.com/test";
+    prefix "tst";
+
+    leaf leaf1 {
+        type int32;
+    }
+}
+    """
+
+    service = Service.from_json(test_tmf_payload)
+    s = yang.compile([yang_schema])
+    gd = yang.gen3.from_data(s, s.identities, service.serviceCharacteristic)
+    return gd.prsrc()
+
+def _test_characteristic_boolean():
+    test_tmf_payload = {
+        "serviceCharacteristic": [
+            {
+                "id": "leaf1",
+                "name": "leaf1",
+                "valueType": "boolean",
+                "value": True
+            }
+        ],
+        "serviceSpecification": {
+            "id": "spec1",
+        }
+    }
+
+    yang_schema = r"""module test {
+    yang-version "1.1";
+    namespace "http://example.com/test";
+    prefix "tst";
+
+    leaf leaf1 {
+        type boolean;
+    }
+}
+    """
+
+    service = Service.from_json(test_tmf_payload)
+    s = yang.compile([yang_schema])
+    gd = yang.gen3.from_data(s, s.identities, service.serviceCharacteristic)
+    return gd.prsrc()
+
+def _test_characteristic_enumeration():
+    test_tmf_payload = {
+        "serviceCharacteristic": [
+            {
+                "id": "leaf1",
+                "name": "leaf1",
+                "valueType": "string",
+                "value": "example"
+            }
+        ],
+        "serviceSpecification": {
+            "id": "spec1",
+        }
+    }
+
+    yang_schema = r"""module test {
+    yang-version "1.1";
+    namespace "http://example.com/test";
+    prefix "tst";
+
+    leaf leaf1 {
+        type enumeration {
+            enum "example";
+            enum "other";
+        }
+    }
+}
+    """
+
+    service = Service.from_json(test_tmf_payload)
+    s = yang.compile([yang_schema])
+    gd = yang.gen3.from_data(s, s.identities, service.serviceCharacteristic)
+    return gd.prsrc()
