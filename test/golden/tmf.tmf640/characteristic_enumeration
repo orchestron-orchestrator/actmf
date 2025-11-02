@@ -1,0 +1,3 @@
+Container({
+  'leaf1': Leaf('enumeration', 'example', ns='http://example.com/test', module='test')
+})

@@ -1,0 +1,1098 @@
+import json
+
+import tmf.tmf640
+import yang.gdata
+import yang.gen3
+import yang.schema
+
+def get_service_catalog_json(catalog_id: ?str = None) -> ?dict[str, ?value]:
+        multiple = catalog_id is None
+        if not multiple and catalog_id != "default":
+            return None
+
+        catalog = ServiceCatalog(
+            id="default",
+            href="/tmf-api/serviceCatalogManagement/v4/serviceCatalog/default",
+            description="Default Service Catalog",
+            lastUpdate="2025-11-01T00:00:00",
+            lifecycleStatus="active",
+            name="Default Service Catalog",
+            version="2025-11-01",
+            category=[ServiceCategoryRef(
+                id="default",
+                href="/tmf-api/serviceCatalogManagement/v4/serviceCategory/default",
+                name="Default Service Category",
+                version="2025-11-01",
+                baseType="ServiceCategoryRef",
+                schemaLocation="/tmf-api/schema/Service/ServiceCategoryRef.schema.json",
+                type="ServiceCategoryRef",
+                referredType="ServiceCategory"
+            )],
+            relatedParty=[],
+            validFor=TimePeriod(
+                endDateTime=None,
+                startDateTime="1970-01-01T00:00:00"
+            ),
+            baseType="ServiceCatalog",
+            schemaLocation="/tmf-api/schema/Service/ServiceCatalog.schema.json",
+            type="ServiceCatalog"
+        )
+
+        return {"serviceCatalog": [catalog.to_json()]} if multiple else {"serviceCatalog": catalog.to_json()}
+
+def get_service_category_json(tmf_spec: dict[str, (keys: list[str], name: str, description: str)], category_id: ?str = None) -> ?dict[str, ?value]:
+    multiple = category_id is None
+    if not multiple and category_id != "default":
+        return None
+
+    category = ServiceCategory(
+        id="default",
+        href="/tmf-api/serviceCatalogManagement/v4/serviceCategory/default",
+        description="Default Service Category",
+        isRoot=True,
+        lastUpdate="2025-11-01T00:00:00",
+        lifecycleStatus="active",
+        name="Default Service Category",
+        parentId=None,
+        version="2025-11-01",
+        category=[],
+        serviceCandidate=[],
+        validFor=TimePeriod(
+            endDateTime=None,
+            startDateTime="1970-01-01T00:00:00"
+        ),
+        baseType="Category",
+        schemaLocation="/tmf-api/schema/Service/ServiceCategory.schema.json",
+        type="ServiceCategory"
+    )
+    for k, v in tmf_spec.items():
+        category.serviceCandidate.append(ServiceCandidateRef(
+            id=k,
+            href="/tmf-api/serviceCatalogManagement/v4/serviceCandidate/{k}",
+            name="{v.name} Service Candidate",
+            version="2025-11-01",
+            baseType="ServiceCandidateRef",
+            schemaLocation="/tmf-api/schema/Service/ServiceCandidateRef.schema.json",
+            type="ServiceCandidateRef",
+            referredType="ServiceCandidate"
+        ))
+
+        return {"serviceCategory": [category.to_json()]} if multiple else {"serviceCategory": category.to_json()}
+
+def get_service_candidate_json(tmf_spec: dict[str, (keys: list[str], name: str, description: str)], candidate_id: ?str = None) -> ?dict[str, ?value]:
+    multiple = candidate_id is None
+    candidates_json = []
+
+    for k, v in tmf_spec.items():
+        if not multiple and candidate_id != k:
+            continue
+
+        candidate = ServiceCandidate(
+            id=k,
+            href="/tmf-api/serviceCatalogManagement/v4/serviceCandidate/{k}",
+            description="{v.description} Service Candidate",
+            lastUpdate="2025-11-01T00:00:00",
+            lifecycleStatus="active",
+            name="{v.name} Service Candidate",
+            version="2025-11-01",
+            category=[ServiceCategoryRef(
+                id="default",
+                href="/tmf-api/serviceCatalogManagement/v4/serviceCategory/default",
+                name="Default Service Category",
+                version="2025-11-01",
+                baseType="ServiceCategoryRef",
+                schemaLocation="/tmf-api/schema/Service/ServiceCategoryRef.schema.json",
+                type="ServiceCategoryRef",
+                referredType="ServiceCategory"
+            )],
+            serviceSpecification=ServiceSpecificationRef(
+                id=k,
+                href="/tmf-api/serviceCatalogManagement/v4/serviceSpecification/{k}",
+                name="{v.name} Service Specification",
+                version="2025-11-01",
+                baseType="ServiceSpecificationRef",
+                schemaLocation="/tmf-api/schema/Service/ServiceSpecificationRef.schema.json",
+                type="ServiceSpecificationRef",
+                referredType="CustomerFacingServiceSpecification"
+            ),
+            validFor=TimePeriod(
+                endDateTime=None,
+                startDateTime="1970-01-01T00:00:00"
+            ),
+            baseType="ServiceCandidate",
+            schemaLocation="/tmf-api/schema/Service/ServiceCandidate.schema.json",
+            type="ServiceCandidate"
+        )
+
+        if multiple:
+            candidates_json.append(candidate.to_json())
+        else:
+            return {"serviceCandidate": candidate.to_json()}
+
+    if multiple:
+        return {"serviceCandidate": candidates_json}
+
+def get_service_specification_json(tmf_spec: dict[str, (keys: list[str], name: str, description: str)], top_schema: yang.schema.DRoot, sspec_id: ?str = None) -> ?dict[str, ?value]:
+    multiple = sspec_id is None
+    sspecs_json = []
+
+    for k, v in tmf_spec.items():
+        if not multiple and sspec_id != k:
+            continue
+
+        sspec = ServiceSpecification(
+            id=k,
+            href="/tmf-api/serviceCatalogManagement/v4/serviceSpecification/{k}",
+            description="{v.description} Service Specification",
+            isBundle=False,
+            lastUpdate="2025-11-01T00:00:00",
+            lifecycleStatus="active",
+            name="{v.name} Service Specification",
+            version="2025-11-01",
+            attachment=[],
+            constraint=[],
+            entitySpecRelationship=[],
+            featureSpecification=[],
+            relatedParty=[],
+            resourceSpecification=[],
+            serviceLevelSpecification=[],
+            serviceSpecRelationship=[],
+            specCharacteristic=[],
+            targetEntitySchema=None,
+            validFor=TimePeriod(
+                endDateTime=None,
+                startDateTime="1970-01-01T00:00:00"
+            ),
+            baseType="ServiceSpecification",
+            schemaLocation="/tmf-api/schema/Service/CustomerFacingServiceSpecification.schema.json",
+            type="CustomerFacingServiceSpecification"
+        )
+
+        schema = top_schema
+        for path_element in k.split("."):
+            schema = schema.get(path_element)
+        if isinstance(schema, yang.schema.DList):
+            for child in schema.children:
+                if isinstance(child, yang.schema.DLeaf):
+                    spec_characteristic = CharacteristicSpecification(
+                        id=child.name,
+                        configurable=True,
+                        description=child.description,
+                        extensible=False,
+                        isUnique=child.name in schema.key or child.name in schema.unique,  # TODO: deal with composite keys/uniques
+                        maxCardinality=1,
+                        minCardinality=1 if child.name in schema.key else 0,
+                        name=child.name,
+                        regex=child.type_.pattern[0].value if child.type_.pattern else None,  # TODO: What regex flavor does TMF expect?
+                        valueType=tmf.tmf640.yang_type_to_tmf_type(child.type_.name),
+                        charSpecRelationship=[],
+                        characteristicValueSpecification=[],
+                        validFor=TimePeriod(
+                            endDateTime=None,
+                            startDateTime="1970-01-01T00:00:00"
+                        ),
+                        baseType="CharacteristicSpecification",
+                        schemaLocation="/tmf-api/schema/Service/CharacteristicSpecification.schema.json",
+                        type="CharacteristicSpecification",
+                        valueSchemaLocation=None  # When to set this?
+                    )
+                    if child.type_.name == "enumeration":
+                        for enum_value in child.type_.enum:
+                            spec_characteristic.characteristicValueSpecification.append(
+                                CharacteristicValueSpecification(
+                                    value=enum_value.name,
+                                    valueType="string",
+                                    isDefault=False,
+                                    validFor=TimePeriod(
+                                        endDateTime=None,
+                                        startDateTime="1970-01-01T00:00:00"
+                                    ),
+                                    baseType="CharacteristicValueSpecification",
+                                    schemaLocation="/tmf-api/schema/Service/CharacteristicValueSpecification.schema.json",
+                                    type="CharacteristicValueSpecification"
+                                )
+                            )
+                    sspec.specCharacteristic.append(spec_characteristic)
+
+        if multiple:
+            sspecs_json.append(sspec.to_json())
+        else:
+            return sspec.to_json()
+
+    if multiple:
+        return {"serviceSpecification": sspecs_json}
+
+def get_opt_obj_to_json(obj) -> ?dict[str, ?value]:
+        o = obj
+        if o is None:
+            return None
+        elif isinstance(o, TimePeriod):
+            return o.to_json()
+        elif isinstance(o, ServiceSpecificationRef):
+            return o.to_json()
+        elif isinstance(o, TargetEntitySchema):
+            return o.to_json()
+        elif isinstance(o, AssociationSpecificationRef):
+            return o.to_json()
+        elif isinstance(o, Quantity):
+            return o.to_json()
+        raise Exception("Unsupported type for get_opt_obj_to_json: " + str(type(o)))
+
+class ServiceCatalog(object):
+    id: ?str
+    href: ?str
+    description: ?str
+    lastUpdate: ?str
+    lifecycleStatus: ?str
+    name: ?str
+    version: ?str
+    category: list  [ServiceCategoryRef]
+    relatedParty: list  [RelatedParty]
+    validFor: ?TimePeriod
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+
+    def __init__(self, id: ?str, href: ?str, description: ?str, lastUpdate: ?str, lifecycleStatus: ?str, name: ?str, version: ?str, category: list  [ServiceCategoryRef], relatedParty: list  [RelatedParty], validFor: ?TimePeriod, baseType: ?str, schemaLocation: ?str, type: ?str):
+        self.id = id
+        self.href = href
+        self.description = description
+        self.lastUpdate = lastUpdate
+        self.lifecycleStatus = lifecycleStatus
+        self.name = name
+        self.version = version
+        self.category = category
+        self.relatedParty = relatedParty
+        self.validFor = validFor
+        self.baseType = baseType
+        self.schemaLocation = schemaLocation
+        self.type = type
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "href": self.href,
+            "description": self.description,
+            "lastUpdate": self.lastUpdate,
+            "lifecycleStatus": self.lifecycleStatus,
+            "name": self.name,
+            "version": self.version,
+            "category": [c.to_json() for c in self.category],
+            "relatedParty": [rp.to_json() for rp in self.relatedParty],
+            "validFor": get_opt_obj_to_json(self.validFor),
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type
+        }
+
+class ServiceCategory(object):
+    id: ?str
+    href: ?str
+    description: ?str
+    isRoot: ?bool
+    lastUpdate: ?str
+    lifecycleStatus: ?str
+    name: ?str
+    parentId: ?str
+    version: ?str
+    category: list  [ServiceCategoryRef]
+    serviceCandidate: list  [ServiceCandidateRef]
+    validFor: ?TimePeriod
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+
+    def __init__(self, id: ?str, href: ?str, description: ?str, isRoot: ?bool, lastUpdate: ?str, lifecycleStatus: ?str, name: ?str, parentId: ?str, version: ?str, category: list  [ServiceCategoryRef], serviceCandidate: list  [ServiceCandidateRef], validFor: ?TimePeriod, baseType: ?str, schemaLocation: ?str, type: ?str):
+        self.id = id
+        self.href = href
+        self.description = description
+        self.isRoot = isRoot
+        self.lastUpdate = lastUpdate
+        self.lifecycleStatus = lifecycleStatus
+        self.name = name
+        self.parentId = parentId
+        self.version = version
+        self.category = category
+        self.serviceCandidate = serviceCandidate
+        self.validFor = validFor
+        self.baseType = baseType
+        self.schemaLocation = schemaLocation
+        self.type = type
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "href": self.href,
+            "description": self.description,
+            "isRoot": self.isRoot,
+            "lastUpdate": self.lastUpdate,
+            "lifecycleStatus": self.lifecycleStatus,
+            "name": self.name,
+            "parentId": self.parentId,
+            "version": self.version,
+            "category": [c.to_json() for c in self.category],
+            "serviceCandidate": [sc.to_json() for sc in self.serviceCandidate],
+            "validFor": get_opt_obj_to_json(self.validFor),
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type
+        }
+
+class ServiceCandidate(object):
+    id: ?str
+    href: ?str
+    description: ?str
+    lastUpdate: ?str
+    lifecycleStatus: ?str
+    name: ?str
+    version: ?str
+    category: list  [ServiceCategoryRef]
+    serviceSpecification: ?ServiceSpecificationRef
+    validFor: ?TimePeriod
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+
+    def __init__(self, id: ?str, href: ?str, description: ?str, lastUpdate: ?str, lifecycleStatus: ?str, name: ?str, version: ?str, category: list  [ServiceCategoryRef], serviceSpecification: ?ServiceSpecificationRef, validFor: ?TimePeriod, baseType: ?str, schemaLocation: ?str, type: ?str):
+        self.id = id
+        self.href = href
+        self.description = description
+        self.lastUpdate = lastUpdate
+        self.lifecycleStatus = lifecycleStatus
+        self.name = name
+        self.version = version
+        self.category = category
+        self.serviceSpecification = serviceSpecification
+        self.validFor = validFor
+        self.baseType = baseType
+        self.schemaLocation = schemaLocation
+        self.type = type
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "href": self.href,
+            "description": self.description,
+            "lastUpdate": self.lastUpdate,
+            "lifecycleStatus": self.lifecycleStatus,
+            "name": self.name,
+            "version": self.version,
+            "category": [c.to_json() for c in self.category],
+            "serviceSpecification": get_opt_obj_to_json(self.serviceSpecification),
+            "validFor": get_opt_obj_to_json(self.validFor),
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type
+        }
+
+class CharacteristicSpecification(object):
+    id: str
+    configurable: ?bool
+    description: ?str
+    extensible: ?bool
+    isUnique: ?bool
+    maxCardinality: ?int
+    minCardinality: ?int
+    name: str
+    regex: ?str
+    valueType: ?str
+    charSpecRelationship: list  [CharacteristicSpecificationRelationship]
+    characteristicValueSpecification: list  [CharacteristicValueSpecification]
+    validFor: ?TimePeriod
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+    valueSchemaLocation: ?str
+
+    def __init__(self, id: str, configurable: ?bool, description: ?str, extensible: ?bool, isUnique: ?bool, maxCardinality: ?int, minCardinality: ?int, name: str, regex: ?str, valueType: ?str, charSpecRelationship: list  [CharacteristicSpecificationRelationship], characteristicValueSpecification: list  [CharacteristicValueSpecification], validFor: ?TimePeriod, baseType: ?str, schemaLocation: ?str, type: ?str, valueSchemaLocation: ?str):
+        self.id = id
+        self.configurable = configurable
+        self.description = description
+        self.extensible = extensible
+        self.isUnique = isUnique
+        self.maxCardinality = maxCardinality
+        self.minCardinality = minCardinality
+        self.name = name
+        self.regex = regex
+        self.valueType = valueType
+        self.charSpecRelationship = charSpecRelationship
+        self.characteristicValueSpecification = characteristicValueSpecification
+        self.validFor = validFor
+        self.baseType = baseType
+        self.schemaLocation = schemaLocation
+        self.type = type
+        self.valueSchemaLocation = valueSchemaLocation
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "configurable": self.configurable,
+            "description": self.description,
+            "extensible": self.extensible,
+            "isUnique": self.isUnique,
+            "maxCardinality": self.maxCardinality,
+            "minCardinality": self.minCardinality,
+            "name": self.name,
+            "regex": self.regex,
+            "valueType": self.valueType,
+            "charSpecRelationship": [csr.to_json() for csr in self.charSpecRelationship],
+            "characteristicValueSpecification": [cvs.to_json() for cvs in self.characteristicValueSpecification],
+            "validFor": get_opt_obj_to_json(self.validFor),
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type,
+            "valueSchemaLocation": self.valueSchemaLocation
+        }
+
+class ServiceSpecification(object):
+    id: str
+    href: ?str
+    description: ?str
+    isBundle: ?bool
+    lastUpdate: ?str
+    lifecycleStatus: ?str
+    name: str
+    version: ?str
+    attachment: list  [AttachmentRefOrValue]
+    constraint: list  [ConstraintRef]
+    entitySpecRelationship: list  [EntitySpecificationRelationship]
+    featureSpecification: list  [FeatureSpecification]
+    relatedParty: list  [RelatedParty]
+    resourceSpecification: list  [ResourceSpecificationRef]
+    serviceLevelSpecification: list  [ServiceLevelSpecificationRef]
+    serviceSpecRelationship: list  [ServiceSpecRelationship]
+    specCharacteristic: list  [CharacteristicSpecification]
+    targetEntitySchema: ?TargetEntitySchema
+    validFor: ?TimePeriod
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+
+    def __init__(self, id: str, href: ?str, description: ?str, isBundle: ?bool, lastUpdate: ?str, lifecycleStatus: ?str, name: str, version: ?str, attachment: list  [AttachmentRefOrValue], constraint: list  [ConstraintRef], entitySpecRelationship: list  [EntitySpecificationRelationship], featureSpecification: list  [FeatureSpecification], relatedParty: list  [RelatedParty], resourceSpecification: list  [ResourceSpecificationRef], serviceLevelSpecification: list  [ServiceLevelSpecificationRef], serviceSpecRelationship: list  [ServiceSpecRelationship], specCharacteristic: list  [CharacteristicSpecification], targetEntitySchema: ?TargetEntitySchema, validFor: ?TimePeriod, baseType: ?str, schemaLocation: ?str, type: ?str):
+        self.id = id
+        self.href = href
+        self.description = description
+        self.isBundle = isBundle
+        self.lastUpdate = lastUpdate
+        self.lifecycleStatus = lifecycleStatus
+        self.name = name
+        self.version = version
+        self.attachment = attachment
+        self.constraint = constraint
+        self.entitySpecRelationship = entitySpecRelationship
+        self.featureSpecification = featureSpecification
+        self.relatedParty = relatedParty
+        self.resourceSpecification = resourceSpecification
+        self.serviceLevelSpecification = serviceLevelSpecification
+        self.serviceSpecRelationship = serviceSpecRelationship
+        self.specCharacteristic = specCharacteristic
+        self.targetEntitySchema = targetEntitySchema
+        self.validFor = validFor
+        self.baseType = baseType
+        self.schemaLocation = schemaLocation
+        self.type = type
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "href": self.href,
+            "description": self.description,
+            "isBundle": self.isBundle,
+            "lastUpdate": self.lastUpdate,
+            "lifecycleStatus": self.lifecycleStatus,
+            "name": self.name,
+            "version": self.version,
+            "attachment": [a.to_json() for a in self.attachment],
+            "constraint": [c.to_json() for c in self.constraint],
+            "entitySpecRelationship": [esr.to_json() for esr in self.entitySpecRelationship],
+            "featureSpecification": [fs.to_json() for fs in self.featureSpecification],
+            "relatedParty": [rp.to_json() for rp in self.relatedParty],
+            "resourceSpecification": [rs.to_json() for rs in self.resourceSpecification],
+            "serviceLevelSpecification": [sls.to_json() for sls in self.serviceLevelSpecification],
+            "serviceSpecRelationship": [ssr.to_json() for ssr in self.serviceSpecRelationship],
+            "specCharacteristic": [sc.to_json() for sc in self.specCharacteristic],
+            "targetEntitySchema": get_opt_obj_to_json(self.targetEntitySchema),
+            "validFor": get_opt_obj_to_json(self.validFor),
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type
+        }
+
+class FeatureSpecification(object):
+    id: ?str
+    configurable: ?bool
+    description: ?str
+    extensible: ?bool
+    isUnique: ?bool
+    maxCardinality: ?int
+    minCardinality: ?int
+    name: ?str
+    regex: ?str
+    valueType: ?str
+    featureSpecCharRelationship: list  [FeatureSpecificationCharacteristicRelationship]
+    featureSpecCharacteristicValue: list  [CharacteristicValueSpecification]
+    validFor: ?TimePeriod
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+    valueSchemaLocation: ?str
+
+    def __init__(self, id: ?str, configurable: ?bool, description: ?str, extensible: ?bool, isUnique: ?bool, maxCardinality: ?int, minCardinality: ?int, name: ?str, regex: ?str, valueType: ?str, featureSpecCharRelationship: list  [FeatureSpecificationCharacteristicRelationship], featureSpecCharacteristicValue: list  [CharacteristicValueSpecification], validFor: ?TimePeriod, baseType: ?str, schemaLocation: ?str, type: ?str, valueSchemaLocation: ?str):
+        self.id = id
+        self.configurable = configurable
+        self.description = description
+        self.extensible = extensible
+        self.isUnique = isUnique
+        self.maxCardinality = maxCardinality
+        self.minCardinality = minCardinality
+        self.name = name
+        self.regex = regex
+        self.valueType = valueType
+        self.featureSpecCharRelationship = featureSpecCharRelationship
+        self.featureSpecCharacteristicValue = featureSpecCharacteristicValue
+        self.validFor = validFor
+        self.baseType = baseType
+        self.schemaLocation = schemaLocation
+        self.type = type
+        self.valueSchemaLocation = valueSchemaLocation
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "configurable": self.configurable,
+            "description": self.description,
+            "extensible": self.extensible,
+            "isUnique": self.isUnique,
+            "maxCardinality": self.maxCardinality,
+            "minCardinality": self.minCardinality,
+            "name": self.name,
+            "regex": self.regex,
+            "valueType": self.valueType,
+            "featureSpecCharRelationship": [fscr.to_json() for fscr in self.featureSpecCharRelationship],
+            "featureSpecCharacteristicValue": [fscv.to_json() for fscv in self.featureSpecCharacteristicValue],
+            "validFor": get_opt_obj_to_json(self.validFor),
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type,
+            "valueSchemaLocation": self.valueSchemaLocation
+        }
+
+class CharacteristicValueSpecification(object):
+    isDefault: ?bool
+    rangeInterval: ?str
+    regex: ?str
+    unitOfMeasure: ?str
+    valueFrom: ?int
+    valueTo: ?int
+    valueType: ?str
+    validFor: ?TimePeriod
+    value: ?value
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+
+    def __init__(self, isDefault: ?bool, rangeInterval: ?str, regex: ?str, unitOfMeasure: ?str, valueFrom: ?int, valueTo: ?int, valueType: ?str, validFor: ?TimePeriod, value: ?value, baseType: ?str, schemaLocation: ?str, type: ?str):
+        self.isDefault = isDefault
+        self.rangeInterval = rangeInterval
+        self.regex = regex
+        self.unitOfMeasure = unitOfMeasure
+        self.valueFrom = valueFrom
+        self.valueTo = valueTo
+        self.valueType = valueType
+        self.validFor = validFor
+        self.value = value
+        self.baseType = baseType
+        self.schemaLocation = schemaLocation
+        self.type = type
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "isDefault": self.isDefault,
+            "rangeInterval": self.rangeInterval,
+            "regex": self.regex,
+            "unitOfMeasure": self.unitOfMeasure,
+            "valueFrom": self.valueFrom,
+            "valueTo": self.valueTo,
+            "valueType": self.valueType,
+            "validFor": get_opt_obj_to_json(self.validFor),
+            "value": self.value,
+            "baseType": self.baseType,
+            "schemaLocation": self.schemaLocation,
+            "type": self.type
+        }
+
+class CharacteristicSpecificationRelationship(object):
+    characteristicSpecificationId: ?str
+    name: ?str
+    parentSpecificationHref: ?str
+    parentSpecificationId: ?str
+    relationshipType: ?str
+    validFor: ?TimePeriod
+
+    def __init__(self, characteristicSpecificationId: ?str, name: ?str, parentSpecificationHref: ?str, parentSpecificationId: ?str, relationshipType: ?str, validFor: ?TimePeriod):
+        self.characteristicSpecificationId = characteristicSpecificationId
+        self.name = name
+        self.parentSpecificationHref = parentSpecificationHref
+        self.parentSpecificationId = parentSpecificationId
+        self.relationshipType = relationshipType
+        self.validFor = validFor
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "characteristicSpecificationId": self.characteristicSpecificationId,
+            "name": self.name,
+            "parentSpecificationHref": self.parentSpecificationHref,
+            "parentSpecificationId": self.parentSpecificationId,
+            "relationshipType": self.relationshipType,
+            "validFor": get_opt_obj_to_json(self.validFor)
+        }
+
+class ServiceSpecRelationship(object):
+    id: ?str
+    href: ?str
+    name: ?str
+    relationshipType: ?str
+    role: ?str
+    validFor: ?TimePeriod
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+    referredType: ?str
+
+    def __init__(self, id: ?str, href: ?str, name: ?str, relationshipType: ?str, role: ?str, validFor: ?TimePeriod, baseType: ?str, schemaLocation: ?str, type: ?str, referredType: ?str):
+        self.id = id
+        self.href = href
+        self.name = name
+        self.relationshipType = relationshipType
+        self.role = role
+        self.validFor = validFor
+        self.baseType = baseType
+        self.schemaLocation = schemaLocation
+        self.type = type
+        self.referredType = referredType
+    
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "href": self.href,
+            "name": self.name,
+            "relationshipType": self.relationshipType,
+            "role": self.role,
+            "validFor": get_opt_obj_to_json(self.validFor),
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type,
+            "@referredType": self.referredType
+        }
+
+class EntitySpecificationRelationship(object):
+    id: ?str
+    href: ?str
+    name: ?str
+    relationshipType: ?str
+    role: ?str
+    associationSpec: ?AssociationSpecificationRef
+    validFor: ?TimePeriod
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+    referredType: ?str
+
+    def __init__(self, id: ?str, href: ?str, name: ?str, relationshipType: ?str, role: ?str, associationSpec: ?AssociationSpecificationRef, validFor: ?TimePeriod, baseType: ?str, schemaLocation: ?str, type: ?str, referredType: ?str):
+        self.id = id
+        self.href = href
+        self.name = name
+        self.relationshipType = relationshipType
+        self.role = role
+        self.associationSpec = associationSpec
+        self.validFor = validFor
+        self.baseType = baseType
+        self.schemaLocation = schemaLocation
+        self.type = type
+        self.referredType = referredType
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "href": self.href,
+            "name": self.name,
+            "relationshipType": self.relationshipType,
+            "role": self.role,
+            "associationSpec": get_opt_obj_to_json(self.associationSpec),
+            "validFor": get_opt_obj_to_json(self.validFor),
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type,
+            "@referredType": self.referredType
+        }
+
+class FeatureSpecificationCharacteristicRelationship(object):
+    characteristicId: ?str
+    featureId: ?str
+    name: ?str
+    relationshipType: ?str
+    resourceSpecificationHref: ?str
+    resourceSpecificationId: ?str
+    validFor: ?TimePeriod
+    
+    def __init__(self, characteristicId: ?str, featureId: ?str, name: ?str, relationshipType: ?str, resourceSpecificationHref: ?str, resourceSpecificationId: ?str, validFor: ?TimePeriod):
+        self.characteristicId = characteristicId
+        self.featureId = featureId
+        self.name = name
+        self.relationshipType = relationshipType
+        self.resourceSpecificationHref = resourceSpecificationHref
+        self.resourceSpecificationId = resourceSpecificationId
+        self.validFor = validFor
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "characteristicId": self.characteristicId,
+            "featureId": self.featureId,
+            "name": self.name,
+            "relationshipType": self.relationshipType,
+            "resourceSpecificationHref": self.resourceSpecificationHref,
+            "resourceSpecificationId": self.resourceSpecificationId,
+            "validFor": get_opt_obj_to_json(self.validFor)
+        }
+
+class ServiceCategoryRef(object):
+    id: ?str
+    href: ?str
+    name: ?str
+    version: ?str
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+    referredType: ?str
+
+    def __init__(self, id: ?str, href: ?str, name: ?str, version: ?str, baseType: ?str, schemaLocation: ?str, type: ?str, referredType: ?str):
+        self.id = id
+        self.href = href
+        self.name = name
+        self.version = version
+        self.baseType = baseType
+        self.schemaLocation = schemaLocation
+        self.type = type
+        self.referredType = referredType
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "href": self.href,
+            "name": self.name,
+            "version": self.version,
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type,
+            "@referredType": self.referredType
+        }
+
+class ServiceCandidateRef(object):
+    id: ?str
+    href: ?str
+    name: ?str
+    version: ?str
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+    referredType: ?str
+
+    def __init__(self, id: ?str, href: ?str, name: ?str, version: ?str, baseType: ?str, schemaLocation: ?str, type: ?str, referredType: ?str):
+        self.id = id
+        self.href = href
+        self.name = name
+        self.version = version
+        self.baseType = baseType
+        self.schemaLocation = schemaLocation
+        self.type = type
+        self.referredType = referredType
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "href": self.href,
+            "name": self.name,
+            "version": self.version,
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type,
+            "@referredType": self.referredType
+        }
+
+class ServiceSpecificationRef(object):
+    id: ?str
+    href: ?str
+    name: ?str
+    version: ?str
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+    referredType: ?str
+
+    def __init__(self, id: ?str, href: ?str, name: ?str, version: ?str, baseType: ?str, schemaLocation: ?str, type: ?str, referredType: ?str):
+        self.id = id
+        self.href = href
+        self.name = name
+        self.version = version
+        self.baseType = baseType
+        self.schemaLocation = schemaLocation
+        self.type = type
+        self.referredType = referredType
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "href": self.href,
+            "name": self.name,
+            "version": self.version,
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type,
+            "@referredType": self.referredType
+        }
+
+class ResourceSpecificationRef(object):
+    id: ?str
+    href: ?str
+    name: ?str
+    version: ?str
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+    referredType: ?str
+
+    def __init__(self, id: ?str, href: ?str, name: ?str, version: ?str, baseType: ?str, schemaLocation: ?str, type: ?str, referredType: ?str):
+        self.id = id
+        self.href = href
+        self.name = name
+        self.version = version
+        self.baseType = baseType
+        self.schemaLocation = schemaLocation
+        self.type = type
+        self.referredType = referredType
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "href": self.href,
+            "name": self.name,
+            "version": self.version,
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type,
+            "@referredType": self.referredType
+        }
+
+class AssociationSpecificationRef(object):
+    id: ?str
+    href: ?str
+    name: ?str
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+    referredType: ?str
+
+    def __init__(self, id: ?str, href: ?str, name: ?str, baseType: ?str, schemaLocation: ?str, type: ?str, referredType: ?str):
+        self.id = id
+        self.href = href
+        self.name = name
+        self.baseType = baseType
+        self.schemaLocation = schemaLocation
+        self.type = type
+        self.referredType = referredType
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "href": self.href,
+            "name": self.name,
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type,
+            "@referredType": self.referredType
+        }
+
+class ServiceLevelSpecificationRef(object):
+    id: ?str
+    href: ?str
+    name: ?str
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+    referredType: ?str
+
+    def __init__(self, id: ?str, href: ?str, name: ?str, baseType: ?str, schemaLocation: ?str, type: ?str, referredType: ?str):
+        self.id = id
+        self.href = href
+        self.name = name
+        self.baseType = baseType
+        self.schemaLocation = schemaLocation
+        self.type = type
+        self.referredType = referredType
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "href": self.href,
+            "name": self.name,
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type,
+            "@referredType": self.referredType
+        }
+
+class ConstraintRef(object):
+    id: ?str
+    href: ?str
+    name: ?str
+    version: ?str
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+    referredType: ?str
+
+    def __init__(self, id: ?str, href: ?str, name: ?str, version: ?str, baseType: ?str, schemaLocation: ?str, type: ?str, referredType: ?str):
+        self.id = id
+        self.href = href
+        self.name = name
+        self.version = version
+        self.baseType = baseType
+        self.schemaLocation = schemaLocation
+        self.type = type
+        self.referredType = referredType
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "href": self.href,
+            "name": self.name,
+            "version": self.version,
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type,
+            "@referredType": self.referredType
+        }
+
+class AttachmentRefOrValue(object):
+    id: ?str
+    href: ?str
+    attachmentType: ?str
+    content: ?str
+    description: ?str
+    mimeType: ?str
+    name: ?str
+    url: ?str
+    size: ?Quantity
+    validFor: ?TimePeriod
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+    referredType: ?str
+
+    def __init__(self, id: ?str, href: ?str, attachmentType: ?str, content: ?str, description: ?str, mimeType: ?str, name: ?str, url: ?str, size: ?Quantity, validFor: ?TimePeriod, baseType: ?str, schemaLocation: ?str, type: ?str, referredType: ?str):
+        self.id = id
+        self.href = href
+        self.attachmentType = attachmentType
+        self.content = content
+        self.description = description
+        self.mimeType = mimeType
+        self.name = name
+        self.url = url
+        self.size = size
+        self.validFor = validFor
+        self.baseType = baseType
+        self.schemaLocation = schemaLocation
+        self.type = type
+        self.referredType = referredType
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "href": self.href,
+            "attachmentType": self.attachmentType,
+            "content": self.content,
+            "description": self.description,
+            "mimeType": self.mimeType,
+            "name": self.name,
+            "url": self.url,
+            "size": get_opt_obj_to_json(self.size),
+            "validFor": get_opt_obj_to_json(self.validFor),
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type,
+            "@referredType": self.referredType
+        }
+
+class Quantity(object):
+    amount: ?float
+    units: ?str
+
+    def __init__(self, amount: ?float, units: ?str):
+        self.amount = amount
+        self.units = units
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "amount": self.amount,
+            "units": self.units
+        }
+
+class RelatedParty(object):
+    id: ?str
+    href: ?str
+    name: ?str
+    role: ?str
+    baseType: ?str
+    schemaLocation: ?str
+    type: ?str
+    referredType: ?str
+
+    def __init__(self, id: ?str, href: ?str, name: ?str, role: ?str, baseType: ?str, schemaLocation: ?str, type: ?str, referredType: ?str):
+        self.id = id
+        self.href = href
+        self.name = name
+        self.role = role
+        self.baseType = baseType
+        self.schemaLocation = schemaLocation
+        self.type = type
+        self.referredType = referredType
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "id": self.id,
+            "href": self.href,
+            "name": self.name,
+            "role": self.role,
+            "@baseType": self.baseType,
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type,
+            "@referredType": self.referredType
+        }
+
+class TimePeriod(object):
+    endDateTime: ?str
+    startDateTime: ?str
+
+    def __init__(self, endDateTime: ?str, startDateTime: ?str):
+        self.endDateTime = endDateTime
+        self.startDateTime = startDateTime
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "endDateTime": self.endDateTime,
+            "startDateTime": self.startDateTime
+        }
+
+class TargetEntitySchema(object):
+    schemaLocation: str
+    type: str
+
+    def __init__(self, schemaLocation: str, type: str):
+        self.schemaLocation = schemaLocation
+        self.type = type
+
+    def to_json(self) -> dict[str, ?value]:
+        return {
+            "@schemaLocation": self.schemaLocation,
+            "@type": self.type
+        }
