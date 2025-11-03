@@ -20,15 +20,24 @@ extension list[Characteristic] (yang.gen3.YangData):
                 if isinstance(entry, Characteristic):
                     entry_value = entry.value
                     if entry.name == name and entry_value is not None:
-                        if entry.valueType == schema.type_.name:
-                            return (schema.type_.name, entry.value)
-                        elif entry.valueType == "number" and schema.type_.name in ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64", "decimal64"]:
-                            return (schema.type_.name, entry.value)
-                        elif entry.valueType == "string" and schema.type_.name == "enumeration":
+                        if json_type_and_yang_type_match(entry.valueType, schema.type_.name):
                             return (schema.type_.name, entry.value)
                         raise yang.gen3.YangValidationError(path, schema.type_, entry_value)
 
     def take_leaflist(self, schema: yang.schema.DLeafList, name: str, ns: ?str=None, path: list[yang.gen3.PathElement]=[]) -> list[(t: str, val: ?value)]:
+        if isinstance(self, list):
+            for entry in self:
+                if isinstance(entry, Characteristic):
+                    entry_value = entry.value
+                    entry_value_type = entry.valueType
+                    if entry.name == name and entry_value is not None and entry_value_type is not None:
+                        if json_type_and_yang_type_match(entry_value_type[:-5] if entry_value_type.endswith("Array") else entry_value_type, schema.type_.name):
+                            if isinstance(entry_value, list):
+                                ret = []
+                                for v in entry_value:
+                                    ret.append((schema.type_.name, v))
+                                return ret
+                        raise yang.gen3.YangValidationError(path, schema.type_, entry_value)
         return []
 
 def get_json(tmf_spec: dict[str, (keys: list[str], name: str, description: str)], layer_config: yang.gdata.Node, service_id: ?str = None) -> ?dict[str, ?value]:
@@ -137,11 +146,26 @@ def yang_type_to_tmf_type(yt: str) -> str:
         return "boolean"
     elif yt == "string":
         return "string"
-    elif yt in ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64", "decimal64"]:
+    elif yt in ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"]:
+        return "integer"
+    elif yt == "decimal64":
         return "number"
     elif yt == "enumeration":
         return "string"
     raise ValueError("Unsupported YANG type: %s" % yt)
+
+def json_type_and_yang_type_match(jt: ?str, yt: ?str) -> bool:
+    if jt == "boolean" and yt == "boolean":
+        return True
+    elif jt == "string" and yt == "string":
+        return True
+    elif jt == "integer" and yt in ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"]:
+        return True
+    elif jt == "number" and yt == "decimal64":
+        return True
+    elif jt == "string" and yt == "enumeration":
+        return True
+    return False
 
 def add_leaf_properties_to_service_characteristics(gd: yang.gdata.Node, service: Service) -> None:
     if isinstance(gd, yang.gdata.Container):
@@ -151,6 +175,12 @@ def add_leaf_properties_to_service_characteristics(gd: yang.gdata.Node, service:
                     if chr.name == k:
                         chr.valueType = yang_type_to_tmf_type(v.t)
                         chr.value = v.val
+                        break
+            elif isinstance(v, yang.gdata.LeafList):
+                for chr in service.serviceCharacteristic:
+                    if chr.name == k:
+                        chr.valueType = "{yang_type_to_tmf_type(v.t)}Array"
+                        chr.value = v.vals
                         break
 
 def get_opt_obj(d: dict[str, ?value], key: str) -> ?dict[str, ?value]:
@@ -2042,6 +2072,39 @@ def _test_characteristic_number():
                 "id": "leaf1",
                 "name": "leaf1",
                 "valueType": "number",
+                "value": 55.7
+            }
+        ],
+        "serviceSpecification": {
+            "id": "spec1",
+        }
+    }
+
+    yang_schema = r"""module test {
+    yang-version "1.1";
+    namespace "http://example.com/test";
+    prefix "tst";
+
+    leaf leaf1 {
+        type decimal64 {
+            fraction-digits 2;
+        }
+    }
+}
+    """
+
+    service = Service.from_json(test_tmf_payload)
+    s = yang.compile([yang_schema])
+    gd = yang.gen3.from_data(s, s.identities, service.serviceCharacteristic)
+    return gd.prsrc()
+
+def _test_characteristic_integer():
+    test_tmf_payload = {
+        "serviceCharacteristic": [
+            {
+                "id": "leaf1",
+                "name": "leaf1",
+                "valueType": "integer",
                 "value": 55
             }
         ],
