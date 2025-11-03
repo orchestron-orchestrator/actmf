@@ -1,9 +1,12 @@
 import json
+import testing
 
 import tmf.tmf640
+import yang
 import yang.gdata
 import yang.gen3
 import yang.schema
+
 
 def get_service_catalog_json(catalog_id: ?str = None) -> ?dict[str, ?value]:
         multiple = catalog_id is None
@@ -40,7 +43,7 @@ def get_service_catalog_json(catalog_id: ?str = None) -> ?dict[str, ?value]:
 
         return {"serviceCatalog": [catalog.to_json()]} if multiple else {"serviceCatalog": catalog.to_json()}
 
-def get_service_category_json(tmf_spec: dict[str, (keys: list[str], name: str, description: str)], category_id: ?str = None) -> ?dict[str, ?value]:
+def get_service_category_json(tmf_spec: dict[str, (name: str, description: str)], category_id: ?str = None) -> ?dict[str, ?value]:
     multiple = category_id is None
     if not multiple and category_id != "default":
         return None
@@ -79,7 +82,7 @@ def get_service_category_json(tmf_spec: dict[str, (keys: list[str], name: str, d
 
         return {"serviceCategory": [category.to_json()]} if multiple else {"serviceCategory": category.to_json()}
 
-def get_service_candidate_json(tmf_spec: dict[str, (keys: list[str], name: str, description: str)], candidate_id: ?str = None) -> ?dict[str, ?value]:
+def get_service_candidate_json(tmf_spec: dict[str, (name: str, description: str)], candidate_id: ?str = None) -> ?dict[str, ?value]:
     multiple = candidate_id is None
     candidates_json = []
 
@@ -132,7 +135,7 @@ def get_service_candidate_json(tmf_spec: dict[str, (keys: list[str], name: str, 
     if multiple:
         return {"serviceCandidate": candidates_json}
 
-def get_service_specification_json(tmf_spec: dict[str, (keys: list[str], name: str, description: str)], top_schema: yang.schema.DRoot, sspec_id: ?str = None) -> ?dict[str, ?value]:
+def get_service_specification_json(tmf_spec: dict[str, (name: str, description: str)], top_schema: yang.schema.DRoot, sspec_id: ?str = None) -> ?dict[str, ?value]:
     multiple = sspec_id is None
     sspecs_json = []
 
@@ -1168,3 +1171,101 @@ class TargetEntitySchema(object):
             "@schemaLocation": self.schemaLocation,
             "@type": self.type
         }
+
+
+def _test_service_catalog_json():
+    data = get_service_catalog_json()
+    return json.encode({"serviceSpecification": data}, pretty=True)
+
+def _test_service_category_json():
+    tmf_spec = {
+        "netinfra.router": (
+            name="Router",
+            description="Network Infrastructure Router"
+        ),
+    }
+    data = get_service_category_json(tmf_spec)
+    return json.encode({"serviceCategory": data}, pretty=True)
+
+def _test_service_candidate_json():
+    tmf_spec = {
+        "netinfra.router": (
+            name="Router",
+            description="Network Infrastructure Router"
+        ),
+    }
+    data = get_service_candidate_json(tmf_spec)
+    return json.encode({"serviceCandidate": data}, pretty=True)
+
+def _test_service_specification_json():
+    tmf_spec = {
+        "netinfra.router": (
+            name="Router",
+            description="Network Infrastructure Router"
+        ),
+        "edge-device.access-interface": (
+            name="Access Interface",
+            description="Access Interface of Edge Device"
+        )
+    }
+    netinfra_schema = r"""module netinfra {
+  namespace "http://example.com/netinfra";
+  prefix netinfra;
+
+    container netinfra {
+        list router {
+            key "name";
+            leaf name {
+                type string;
+                description "Name of the router";
+            }
+            leaf model {
+                type string;
+                description "Model of the router";
+            }
+            leaf capacity {
+                type int32;
+                description "Capacity of the router in Mbps";
+            }
+            leaf vendor {
+                type enumeration {
+                    enum "Cisco";
+                    enum "Juniper";
+                    enum "Nokia";
+                }
+                default "Cisco";
+                description "Vendor of the router";
+            }
+            leaf-list qos-profiles {
+                type string;
+                description "List of QoS profiles supported by the router";
+            }
+        }
+    }
+}"""
+    edge_schema = r"""module edge {
+  namespace "http://example.com/edge";
+  prefix edge;
+
+    list edge-device {
+        key "device-name";
+        leaf device-name {
+            type string;
+            description "Name of the edge device";
+        }
+        list access-interface {
+            key "interface-name";
+            leaf interface-name {
+                type string;
+                description "Name of the access interface";
+            }
+            leaf speed {
+                type int32;
+                description "Speed of the interface in Mbps";
+            }
+        }
+    }
+}"""
+    top_schema = yang.compile([netinfra_schema, edge_schema])
+    data = get_service_specification_json(tmf_spec, top_schema)
+    return json.encode({"serviceSpecification": data}, pretty=True)

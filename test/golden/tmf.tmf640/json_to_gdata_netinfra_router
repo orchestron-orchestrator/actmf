@@ -1,0 +1,55 @@
+Container({
+  'netinfra': Container({
+    'router': List(['name'], ns='http://example.com/netinfra', module='netinfra', elements=[
+      Container({
+        'name': Leaf('string', 'ams-core-1')
+      })
+    ])
+  }, ns='http://example.com/netinfra', module='netinfra'),
+  'tmf-store': Container({
+    'tmf640': Container({
+      'service': List(['id'], elements=[
+        Container({
+          'id': Leaf('string', 'netinfra.router(ams-core-1)'),
+          'href': Leaf('string', '/tmf-api/ServiceActivationAndConfiguration/v4/service/netinfra.router(ams-core-1)'),
+          'hasStarted': Leaf('boolean', True),
+          'isBundle': Leaf('boolean', False),
+          'isServiceEnabled': Leaf('boolean', True),
+          'isStateful': Leaf('boolean', False),
+          'name': Leaf('string', 'ams-core-1'),
+          'startMode': Leaf('string', '1'),
+          'state': Leaf('string', 'active'),
+          'baseType': Leaf('string', 'Service'),
+          'schemaLocation': Leaf('string', '/tmf-api/schema/Service/Service.schema.json'),
+          'type': Leaf('string', 'Service'),
+          'feature': List(['id']),
+          'note': List(['id']),
+          'place': List(['id']),
+          'relatedEntity': List(['id']),
+          'relatedParty': List(['id']),
+          'serviceCharacteristic': List(['name'], elements=[
+            Container({
+              'id': Leaf('string', 'name'),
+              'name': Leaf('string', 'name'),
+              'baseType': Leaf('string', 'Characteristic'),
+              'schemaLocation': Leaf('string', '/tmf-api/schema/Service/Characteristic.schema.json'),
+              'type': Leaf('string', 'Characteristic'),
+              'characteristicRelationship': List(['id'])
+            })
+          ]),
+          'serviceOrderItem': List(['id']),
+          'serviceRelationship': List(['id']),
+          'serviceSpecification': Container({
+            'id': Leaf('string', 'netinfra.router'),
+            'baseType': Leaf('string', 'ServiceSpecificationRef'),
+            'schemaLocation': Leaf('string', '/tmf-api/schema/Service/ServiceSpecificationRef.schema.json'),
+            'type': Leaf('string', 'ServiceSpecificationRef'),
+            'referredType': Leaf('string', 'ServiceSpecification')
+          }),
+          'supportingResource': List(['id']),
+          'supportingService': List(['id'])
+        })
+      ])
+    })
+  }, ns='http://orchestron.org/yang/orchestron-tmf', module='orchestron-tmf')
+})
