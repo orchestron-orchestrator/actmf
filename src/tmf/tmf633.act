@@ -181,7 +181,7 @@ def get_service_specification_json(tmf_spec: dict[str, (keys: list[str], name: s
                         extensible=False,
                         isUnique=child.name in schema.key or child.name in schema.unique,  # TODO: deal with composite keys/uniques
                         maxCardinality=1,
-                        minCardinality=1 if child.name in schema.key else 0,
+                        minCardinality=1 if child.name in schema.key or child.mandatory else 0,
                         name=child.name,
                         regex=child.type_.pattern[0].value if child.type_.pattern else None,  # TODO: What regex flavor does TMF expect?
                         valueType=tmf.tmf640.yang_type_to_tmf_type(child.type_.name),
@@ -202,7 +202,79 @@ def get_service_specification_json(tmf_spec: dict[str, (keys: list[str], name: s
                                 CharacteristicValueSpecification(
                                     value=enum_value.name,
                                     valueType="string",
-                                    isDefault=False,
+                                    isDefault=enum_value.name == child.default,
+                                    validFor=TimePeriod(
+                                        endDateTime=None,
+                                        startDateTime="1970-01-01T00:00:00"
+                                    ),
+                                    baseType="CharacteristicValueSpecification",
+                                    schemaLocation="/tmf-api/schema/Service/CharacteristicValueSpecification.schema.json",
+                                    type="CharacteristicValueSpecification"
+                                )
+                            )
+                    elif child.default is not None:
+                        spec_characteristic.characteristicValueSpecification.append(
+                            CharacteristicValueSpecification(
+                                value=child.default,
+                                valueType=tmf.tmf640.yang_type_to_tmf_type(child.type_.name),
+                                isDefault=True,
+                                validFor=TimePeriod(
+                                    endDateTime=None,
+                                    startDateTime="1970-01-01T00:00:00"
+                                ),
+                                baseType="CharacteristicValueSpecification",
+                                schemaLocation="/tmf-api/schema/Service/CharacteristicValueSpecification.schema.json",
+                                type="CharacteristicValueSpecification"
+                            )
+                        )
+                    sspec.specCharacteristic.append(spec_characteristic)
+                elif isinstance(child, yang.schema.DLeafList):
+                    spec_characteristic = CharacteristicSpecification(
+                        id=child.name,
+                        configurable=True,
+                        description=child.description,
+                        extensible=False,
+                        isUnique=child.name in schema.key or child.name in schema.unique,  # TODO: deal with composite keys/uniques
+                        maxCardinality=child.max_elements,
+                        minCardinality=child.min_elements or 1 if child.name in schema.key else 0,
+                        name=child.name,
+                        regex=child.type_.pattern[0].value if child.type_.pattern else None,  # TODO: What regex flavor does TMF expect?
+                        valueType="{tmf.tmf640.yang_type_to_tmf_type(child.type_.name)}Array",
+                        charSpecRelationship=[],
+                        characteristicValueSpecification=[],
+                        validFor=TimePeriod(
+                            endDateTime=None,
+                            startDateTime="1970-01-01T00:00:00"
+                        ),
+                        baseType="CharacteristicSpecification",
+                        schemaLocation="/tmf-api/schema/Service/CharacteristicSpecification.schema.json",
+                        type="CharacteristicSpecification",
+                        valueSchemaLocation=None  # When to set this?
+                    )
+                    child_default = child.default
+                    if child.type_.name == "enumeration":
+                        for enum_value in child.type_.enum:
+                            spec_characteristic.characteristicValueSpecification.append(
+                                CharacteristicValueSpecification(
+                                    value=enum_value.name,
+                                    valueType="string",
+                                    isDefault=enum_value.name in child_default if child_default is not None else False,
+                                    validFor=TimePeriod(
+                                        endDateTime=None,
+                                        startDateTime="1970-01-01T00:00:00"
+                                    ),
+                                    baseType="CharacteristicValueSpecification",
+                                    schemaLocation="/tmf-api/schema/Service/CharacteristicValueSpecification.schema.json",
+                                    type="CharacteristicValueSpecification"
+                                )
+                            )
+                    elif child_default is not None:
+                        for default_value in child_default:
+                            spec_characteristic.characteristicValueSpecification.append(
+                                CharacteristicValueSpecification(
+                                    value=default_value,
+                                    valueType=tmf.tmf640.yang_type_to_tmf_type(child.type_.name),
+                                    isDefault=True,
                                     validFor=TimePeriod(
                                         endDateTime=None,
                                         startDateTime="1970-01-01T00:00:00"
