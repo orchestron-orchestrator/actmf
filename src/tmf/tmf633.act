@@ -202,7 +202,7 @@ def get_service_specification_json(tmf_spec: dict[str, (keys: list[str], name: s
                                 CharacteristicValueSpecification(
                                     value=enum_value.name,
                                     valueType="string",
-                                    isDefault=False,
+                                    isDefault=enum_value.name == child.default,
                                     validFor=TimePeriod(
                                         endDateTime=None,
                                         startDateTime="1970-01-01T00:00:00"
@@ -212,6 +212,21 @@ def get_service_specification_json(tmf_spec: dict[str, (keys: list[str], name: s
                                     type="CharacteristicValueSpecification"
                                 )
                             )
+                    elif child.default is not None:
+                        spec_characteristic.characteristicValueSpecification.append(
+                            CharacteristicValueSpecification(
+                                value=child.default,
+                                valueType=tmf.tmf640.yang_type_to_tmf_type(child.type_.name),
+                                isDefault=True,
+                                validFor=TimePeriod(
+                                    endDateTime=None,
+                                    startDateTime="1970-01-01T00:00:00"
+                                ),
+                                baseType="CharacteristicValueSpecification",
+                                schemaLocation="/tmf-api/schema/Service/CharacteristicValueSpecification.schema.json",
+                                type="CharacteristicValueSpecification"
+                            )
+                        )
                     sspec.specCharacteristic.append(spec_characteristic)
 
         if multiple:
