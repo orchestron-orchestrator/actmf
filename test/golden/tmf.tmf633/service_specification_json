@@ -1,0 +1,268 @@
+{
+    "serviceSpecification": {
+        "serviceSpecification": [
+            {
+                "id": "netinfra.router",
+                "href": "/tmf-api/serviceCatalogManagement/v4/serviceSpecification/netinfra.router",
+                "description": "Network Infrastructure Router Service Specification",
+                "isBundle": false,
+                "lastUpdate": "2025-11-01T00:00:00",
+                "lifecycleStatus": "active",
+                "name": "Router Service Specification",
+                "version": "2025-11-01",
+                "attachment": [],
+                "constraint": [],
+                "entitySpecRelationship": [],
+                "featureSpecification": [],
+                "relatedParty": [],
+                "resourceSpecification": [],
+                "serviceLevelSpecification": [],
+                "serviceSpecRelationship": [],
+                "specCharacteristic": [
+                    {
+                        "id": "name",
+                        "configurable": true,
+                        "description": "Name of the router",
+                        "extensible": false,
+                        "isUnique": true,
+                        "maxCardinality": 1,
+                        "minCardinality": 1,
+                        "name": "name",
+                        "regex": null,
+                        "valueType": "string",
+                        "charSpecRelationship": [],
+                        "characteristicValueSpecification": [],
+                        "validFor": {
+                            "endDateTime": null,
+                            "startDateTime": "1970-01-01T00:00:00"
+                        },
+                        "@baseType": "CharacteristicSpecification",
+                        "@schemaLocation": "/tmf-api/schema/Service/CharacteristicSpecification.schema.json",
+                        "@type": "CharacteristicSpecification",
+                        "valueSchemaLocation": null
+                    },
+                    {
+                        "id": "model",
+                        "configurable": true,
+                        "description": "Model of the router",
+                        "extensible": false,
+                        "isUnique": false,
+                        "maxCardinality": 1,
+                        "minCardinality": 0,
+                        "name": "model",
+                        "regex": null,
+                        "valueType": "string",
+                        "charSpecRelationship": [],
+                        "characteristicValueSpecification": [],
+                        "validFor": {
+                            "endDateTime": null,
+                            "startDateTime": "1970-01-01T00:00:00"
+                        },
+                        "@baseType": "CharacteristicSpecification",
+                        "@schemaLocation": "/tmf-api/schema/Service/CharacteristicSpecification.schema.json",
+                        "@type": "CharacteristicSpecification",
+                        "valueSchemaLocation": null
+                    },
+                    {
+                        "id": "capacity",
+                        "configurable": true,
+                        "description": "Capacity of the router in Mbps",
+                        "extensible": false,
+                        "isUnique": false,
+                        "maxCardinality": 1,
+                        "minCardinality": 0,
+                        "name": "capacity",
+                        "regex": null,
+                        "valueType": "integer",
+                        "charSpecRelationship": [],
+                        "characteristicValueSpecification": [],
+                        "validFor": {
+                            "endDateTime": null,
+                            "startDateTime": "1970-01-01T00:00:00"
+                        },
+                        "@baseType": "CharacteristicSpecification",
+                        "@schemaLocation": "/tmf-api/schema/Service/CharacteristicSpecification.schema.json",
+                        "@type": "CharacteristicSpecification",
+                        "valueSchemaLocation": null
+                    },
+                    {
+                        "id": "vendor",
+                        "configurable": true,
+                        "description": "Vendor of the router",
+                        "extensible": false,
+                        "isUnique": false,
+                        "maxCardinality": 1,
+                        "minCardinality": 0,
+                        "name": "vendor",
+                        "regex": null,
+                        "valueType": "string",
+                        "charSpecRelationship": [],
+                        "characteristicValueSpecification": [
+                            {
+                                "isDefault": true,
+                                "rangeInterval": null,
+                                "regex": null,
+                                "unitOfMeasure": null,
+                                "valueFrom": null,
+                                "valueTo": null,
+                                "valueType": "string",
+                                "validFor": {
+                                    "endDateTime": null,
+                                    "startDateTime": "1970-01-01T00:00:00"
+                                },
+                                "value": "Cisco",
+                                "baseType": "CharacteristicValueSpecification",
+                                "schemaLocation": "/tmf-api/schema/Service/CharacteristicValueSpecification.schema.json",
+                                "type": "CharacteristicValueSpecification"
+                            },
+                            {
+                                "isDefault": false,
+                                "rangeInterval": null,
+                                "regex": null,
+                                "unitOfMeasure": null,
+                                "valueFrom": null,
+                                "valueTo": null,
+                                "valueType": "string",
+                                "validFor": {
+                                    "endDateTime": null,
+                                    "startDateTime": "1970-01-01T00:00:00"
+                                },
+                                "value": "Juniper",
+                                "baseType": "CharacteristicValueSpecification",
+                                "schemaLocation": "/tmf-api/schema/Service/CharacteristicValueSpecification.schema.json",
+                                "type": "CharacteristicValueSpecification"
+                            },
+                            {
+                                "isDefault": false,
+                                "rangeInterval": null,
+                                "regex": null,
+                                "unitOfMeasure": null,
+                                "valueFrom": null,
+                                "valueTo": null,
+                                "valueType": "string",
+                                "validFor": {
+                                    "endDateTime": null,
+                                    "startDateTime": "1970-01-01T00:00:00"
+                                },
+                                "value": "Nokia",
+                                "baseType": "CharacteristicValueSpecification",
+                                "schemaLocation": "/tmf-api/schema/Service/CharacteristicValueSpecification.schema.json",
+                                "type": "CharacteristicValueSpecification"
+                            }
+                        ],
+                        "validFor": {
+                            "endDateTime": null,
+                            "startDateTime": "1970-01-01T00:00:00"
+                        },
+                        "@baseType": "CharacteristicSpecification",
+                        "@schemaLocation": "/tmf-api/schema/Service/CharacteristicSpecification.schema.json",
+                        "@type": "CharacteristicSpecification",
+                        "valueSchemaLocation": null
+                    },
+                    {
+                        "id": "qos-profiles",
+                        "configurable": true,
+                        "description": "List of QoS profiles supported by the router",
+                        "extensible": false,
+                        "isUnique": false,
+                        "maxCardinality": null,
+                        "minCardinality": 0,
+                        "name": "qos-profiles",
+                        "regex": null,
+                        "valueType": "stringArray",
+                        "charSpecRelationship": [],
+                        "characteristicValueSpecification": [],
+                        "validFor": {
+                            "endDateTime": null,
+                            "startDateTime": "1970-01-01T00:00:00"
+                        },
+                        "@baseType": "CharacteristicSpecification",
+                        "@schemaLocation": "/tmf-api/schema/Service/CharacteristicSpecification.schema.json",
+                        "@type": "CharacteristicSpecification",
+                        "valueSchemaLocation": null
+                    }
+                ],
+                "targetEntitySchema": null,
+                "validFor": {
+                    "endDateTime": null,
+                    "startDateTime": "1970-01-01T00:00:00"
+                },
+                "@baseType": "ServiceSpecification",
+                "@schemaLocation": "/tmf-api/schema/Service/CustomerFacingServiceSpecification.schema.json",
+                "@type": "CustomerFacingServiceSpecification"
+            },
+            {
+                "id": "edge-device.access-interface",
+                "href": "/tmf-api/serviceCatalogManagement/v4/serviceSpecification/edge-device.access-interface",
+                "description": "Access Interface of Edge Device Service Specification",
+                "isBundle": false,
+                "lastUpdate": "2025-11-01T00:00:00",
+                "lifecycleStatus": "active",
+                "name": "Access Interface Service Specification",
+                "version": "2025-11-01",
+                "attachment": [],
+                "constraint": [],
+                "entitySpecRelationship": [],
+                "featureSpecification": [],
+                "relatedParty": [],
+                "resourceSpecification": [],
+                "serviceLevelSpecification": [],
+                "serviceSpecRelationship": [],
+                "specCharacteristic": [
+                    {
+                        "id": "interface-name",
+                        "configurable": true,
+                        "description": "Name of the access interface",
+                        "extensible": false,
+                        "isUnique": true,
+                        "maxCardinality": 1,
+                        "minCardinality": 1,
+                        "name": "interface-name",
+                        "regex": null,
+                        "valueType": "string",
+                        "charSpecRelationship": [],
+                        "characteristicValueSpecification": [],
+                        "validFor": {
+                            "endDateTime": null,
+                            "startDateTime": "1970-01-01T00:00:00"
+                        },
+                        "@baseType": "CharacteristicSpecification",
+                        "@schemaLocation": "/tmf-api/schema/Service/CharacteristicSpecification.schema.json",
+                        "@type": "CharacteristicSpecification",
+                        "valueSchemaLocation": null
+                    },
+                    {
+                        "id": "speed",
+                        "configurable": true,
+                        "description": "Speed of the interface in Mbps",
+                        "extensible": false,
+                        "isUnique": false,
+                        "maxCardinality": 1,
+                        "minCardinality": 0,
+                        "name": "speed",
+                        "regex": null,
+                        "valueType": "integer",
+                        "charSpecRelationship": [],
+                        "characteristicValueSpecification": [],
+                        "validFor": {
+                            "endDateTime": null,
+                            "startDateTime": "1970-01-01T00:00:00"
+                        },
+                        "@baseType": "CharacteristicSpecification",
+                        "@schemaLocation": "/tmf-api/schema/Service/CharacteristicSpecification.schema.json",
+                        "@type": "CharacteristicSpecification",
+                        "valueSchemaLocation": null
+                    }
+                ],
+                "targetEntitySchema": null,
+                "validFor": {
+                    "endDateTime": null,
+                    "startDateTime": "1970-01-01T00:00:00"
+                },
+                "@baseType": "ServiceSpecification",
+                "@schemaLocation": "/tmf-api/schema/Service/CustomerFacingServiceSpecification.schema.json",
+                "@type": "CustomerFacingServiceSpecification"
+            }
+        ]
+    }
+}

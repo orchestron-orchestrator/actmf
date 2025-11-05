@@ -1,0 +1,57 @@
+{
+    "service": [
+        {
+            "id": "netinfra.router(ams-core-1)",
+            "href": "/tmf-api/ServiceActivationAndConfiguration/v4/service/netinfra.router(ams-core-1)",
+            "category": null,
+            "description": null,
+            "endDate": null,
+            "hasStarted": true,
+            "isBundle": false,
+            "isServiceEnabled": true,
+            "isStateful": false,
+            "name": "ams-core-1",
+            "serviceDate": "2024-06-01T12:00:00Z",
+            "serviceType": null,
+            "startDate": "2024-06-01T12:00:00Z",
+            "startMode": "1",
+            "feature": [],
+            "note": [],
+            "place": [],
+            "relatedEntity": [],
+            "relatedParty": [],
+            "serviceCharacteristic": [
+                {
+                    "id": "name",
+                    "name": "name",
+                    "valueType": "string",
+                    "characteristicRelationship": [],
+                    "value": "ams-core-1",
+                    "@baseType": "Characteristic",
+                    "@schemaLocation": "/tmf-api/schema/Service/Characteristic.schema.json",
+                    "@type": "Characteristic"
+                }
+            ],
+            "serviceOrderItem": [],
+            "serviceRelationship": [],
+            "serviceSpecification": [
+                {
+                    "id": "netinfra.router",
+                    "href": null,
+                    "name": null,
+                    "version": null,
+                    "@baseType": "ServiceSpecificationRef",
+                    "@schemaLocation": "/tmf-api/schema/Service/ServiceSpecificationRef.schema.json",
+                    "@type": "ServiceSpecificationRef",
+                    "@referredType": "ServiceSpecification"
+                }
+            ],
+            "state": "active",
+            "supportingResource": [],
+            "supportingService": [],
+            "@baseType": "Service",
+            "@schemaLocation": "/tmf-api/schema/Service/Service.schema.json",
+            "@type": "Service"
+        }
+    ]
+}
