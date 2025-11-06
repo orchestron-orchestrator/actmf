@@ -177,14 +177,14 @@ def json_to_gdata(tmf_spec: dict[str, (name: str, description: str)], data: dict
 
         ss = find_supporting_service_by_path(service, current_path)
         if ss is not None:
-            gd = yang.gen3.from_data(top_schema, top_schema.identities, ss.serviceCharacteristic, root_path=root_path)
+            gd = yang.gen3.from_data(top_schema, ss.serviceCharacteristic, root_path=root_path)
             if gd is not None:
                 if isinstance(current_node, yang.gdata.List):
                     current_node.elements.append(gd)
                 aggregate_tmf_id = add_key_properties_to_service(ss, gd, schema, aggregate_tmf_id, path_element)
                 current_node = gd
 
-    gd = yang.gen3.from_data(top_schema, top_schema.identities, service.serviceCharacteristic, root_path=root_path)
+    gd = yang.gen3.from_data(top_schema, service.serviceCharacteristic, root_path=root_path)
     if isinstance(current_node, yang.gdata.List):
         current_node.elements.append(gd)
 
@@ -2078,7 +2078,7 @@ def _test_netinfra_router():
 
     service = Service.from_json(test_tmf_payload)
     s = yang.compile([yang_schema])
-    gd = yang.gen3.from_data(s, s.identities, service.serviceCharacteristic, root_path=["test:netinfra", "router"])
+    gd = yang.gen3.from_data(s, service.serviceCharacteristic, root_path=["test:netinfra", "router"])
     r = yang.gdata.Container({
         "test:netinfra": yang.gdata.Container({
             "router": yang.gdata.List(["name"], [gd])})
@@ -2114,7 +2114,7 @@ def _test_characteristic_type_mismatch():
     service = Service.from_json(test_tmf_payload)
     s = yang.compile([yang_schema])
     try:
-        gd = yang.gen3.from_data(s, s.identities, service.serviceCharacteristic)
+        gd = yang.gen3.from_data(s, service.serviceCharacteristic)
     except yang.gen3.YangValidationError as exc:
         testing.assertEqual("Invalid value at /: '415-275-7439' - expected int32", str(exc), "Expected YangValidationError")
         return
@@ -2150,7 +2150,7 @@ def _test_characteristic_number():
 
     service = Service.from_json(test_tmf_payload)
     s = yang.compile([yang_schema])
-    gd = yang.gen3.from_data(s, s.identities, service.serviceCharacteristic)
+    gd = yang.gen3.from_data(s, service.serviceCharacteristic)
     return gd.prsrc()
 
 def _test_characteristic_integer():
@@ -2181,7 +2181,7 @@ def _test_characteristic_integer():
 
     service = Service.from_json(test_tmf_payload)
     s = yang.compile([yang_schema])
-    gd = yang.gen3.from_data(s, s.identities, service.serviceCharacteristic)
+    gd = yang.gen3.from_data(s, service.serviceCharacteristic)
     return gd.prsrc()
 
 def _test_characteristic_boolean():
@@ -2212,7 +2212,7 @@ def _test_characteristic_boolean():
 
     service = Service.from_json(test_tmf_payload)
     s = yang.compile([yang_schema])
-    gd = yang.gen3.from_data(s, s.identities, service.serviceCharacteristic)
+    gd = yang.gen3.from_data(s, service.serviceCharacteristic)
     return gd.prsrc()
 
 def _test_characteristic_enumeration():
@@ -2246,7 +2246,7 @@ def _test_characteristic_enumeration():
 
     service = Service.from_json(test_tmf_payload)
     s = yang.compile([yang_schema])
-    gd = yang.gen3.from_data(s, s.identities, service.serviceCharacteristic)
+    gd = yang.gen3.from_data(s, service.serviceCharacteristic)
     return gd.prsrc()
 
 def _test_json_to_gdata_netinfra_router():
