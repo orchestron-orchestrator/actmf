@@ -40,7 +40,7 @@ extension list[Characteristic] (yang.gen3.YangData):
                         raise yang.gen3.YangValidationError(path, schema.type_, entry_value)
         return []
 
-def get_json(layer_config: yang.gdata.Node, service_id: ?str = None) -> ?dict[str, ?value]:
+def _get_service_json(layer_config: yang.gdata.Node, service_id: ?str = None) -> ?value:
     multiple = service_id is None
     services_json = []
 
@@ -75,10 +75,23 @@ def get_json(layer_config: yang.gdata.Node, service_id: ?str = None) -> ?dict[st
                     for element in config.elements:
                         if get_child_str(element, config.keys[0]) == last_path_element.split("(")[1].split(")")[0]:
                             add_leaf_properties_to_service_characteristics(element, service)
-                            return {"service": service.to_json()}
+                            return service.to_json()
 
     if multiple:
-        return {"service": services_json}
+        return services_json
+
+def get_service_json(layer_config: yang.gdata.Node, service_id: str) -> ?dict[str, ?value]:
+    service = _get_service_json(layer_config, service_id)
+    if service is not None:
+        if isinstance(service, dict):
+            return service
+
+def get_service_list_json(layer_config: yang.gdata.Node) -> list[dict[str, ?value]]:
+    services = _get_service_json(layer_config)
+    if services is not None:
+        if isinstance(services, list):
+            return services
+    return []
 
 def get_service_specification_id(s: ?object) -> str:
     if isinstance(s, Service):
@@ -2351,10 +2364,8 @@ def _test_get_json_netinfra_router():
             })
         }, ns='http://orchestron.org/yang/orchestron-tmf', module='orchestron-tmf')
         })
-    data = get_json(layer_config)
-    if data is not None:
-        return json.encode(data, pretty=True)
-    raise ValueError("No data generated")
+    data = get_service_list_json(layer_config)
+    return json.encode_list(data, pretty=True)
 
 def _test_json_to_gdata_edge_device_access_interface():
     tmf_spec = {
@@ -2682,7 +2693,5 @@ def _test_get_json_edge_device_access_interface_vlan():
             })
         }, ns='http://orchestron.org/yang/orchestron-tmf', module='orchestron-tmf')
         })
-    data = get_json(layer_config)
-    if data is not None:
-        return json.encode(data, pretty=True)
-    raise ValueError("No data generated")
+    data = get_service_list_json(layer_config)
+    return json.encode_list(data, pretty=True)

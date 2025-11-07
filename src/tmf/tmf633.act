@@ -8,7 +8,7 @@ import yang.gen3
 import yang.schema
 
 
-def get_service_catalog_json(catalog_id: ?str = None) -> ?dict[str, ?value]:
+def _get_service_catalog_json(catalog_id: ?str = None) -> ?value:
         multiple = catalog_id is None
         if not multiple and catalog_id != "default":
             return None
@@ -41,9 +41,22 @@ def get_service_catalog_json(catalog_id: ?str = None) -> ?dict[str, ?value]:
             type="ServiceCatalog"
         )
 
-        return {"serviceCatalog": [catalog.to_json()]} if multiple else {"serviceCatalog": catalog.to_json()}
+        return [catalog.to_json()] if multiple else catalog.to_json()
 
-def get_service_category_json(tmf_spec: dict[str, (name: str, description: str)], category_id: ?str = None) -> ?dict[str, ?value]:
+def get_service_catalog_json(catalog_id: str) -> ?dict[str, ?value]:
+    catalog = _get_service_catalog_json(catalog_id)
+    if catalog is not None:
+        if isinstance(catalog, dict):
+            return catalog
+
+def get_service_catalog_list_json() -> list[dict[str, ?value]]:
+    catalogs = _get_service_catalog_json()
+    if catalogs is not None:
+        if isinstance(catalogs, list):
+            return catalogs
+    return []
+
+def _get_service_category_json(tmf_spec: dict[str, (name: str, description: str)], category_id: ?str = None) -> ?value:
     multiple = category_id is None
     if not multiple and category_id != "default":
         return None
@@ -80,9 +93,22 @@ def get_service_category_json(tmf_spec: dict[str, (name: str, description: str)]
             referredType="ServiceCandidate"
         ))
 
-        return {"serviceCategory": [category.to_json()]} if multiple else {"serviceCategory": category.to_json()}
+        return [category.to_json()] if multiple else category.to_json()
 
-def get_service_candidate_json(tmf_spec: dict[str, (name: str, description: str)], candidate_id: ?str = None) -> ?dict[str, ?value]:
+def get_service_category_json(tmf_spec: dict[str, (name: str, description: str)], category_id: str) -> ?dict[str, ?value]:
+    category = _get_service_category_json(tmf_spec, category_id)
+    if category is not None:
+        if isinstance(category, dict):
+            return category
+
+def get_service_category_list_json(tmf_spec: dict[str, (name: str, description: str)]) -> list[dict[str, ?value]]:
+    categories = _get_service_category_json(tmf_spec)
+    if categories is not None:
+        if isinstance(categories, list):
+            return categories
+    return []
+
+def _get_service_candidate_json(tmf_spec: dict[str, (name: str, description: str)], candidate_id: ?str = None) -> ?value:
     multiple = candidate_id is None
     candidates_json = []
 
@@ -130,12 +156,25 @@ def get_service_candidate_json(tmf_spec: dict[str, (name: str, description: str)
         if multiple:
             candidates_json.append(candidate.to_json())
         else:
-            return {"serviceCandidate": candidate.to_json()}
+            return candidate.to_json()
 
     if multiple:
-        return {"serviceCandidate": candidates_json}
+        return candidates_json
 
-def get_service_specification_json(tmf_spec: dict[str, (name: str, description: str)], top_schema: yang.schema.DRoot, sspec_id: ?str = None) -> ?dict[str, ?value]:
+def get_service_candidate_json(tmf_spec: dict[str, (name: str, description: str)], candidate_id: str) -> ?dict[str, ?value]:
+    candidate = _get_service_candidate_json(tmf_spec, candidate_id)
+    if candidate is not None:
+        if isinstance(candidate, dict):
+            return candidate
+
+def get_service_candidate_list_json(tmf_spec: dict[str, (name: str, description: str)]) -> list[dict[str, ?value]]:
+    candidates = _get_service_candidate_json(tmf_spec)
+    if candidates is not None:
+        if isinstance(candidates, list):
+            return candidates
+    return []
+
+def _get_service_specification_json(tmf_spec: dict[str, (name: str, description: str)], top_schema: yang.schema.DRoot, sspec_id: ?str = None) -> ?value:
     multiple = sspec_id is None
     sspecs_json = []
 
@@ -295,7 +334,20 @@ def get_service_specification_json(tmf_spec: dict[str, (name: str, description: 
             return sspec.to_json()
 
     if multiple:
-        return {"serviceSpecification": sspecs_json}
+        return sspecs_json
+
+def get_service_specification_json(tmf_spec: dict[str, (name: str, description: str)], top_schema: yang.schema.DRoot, sspec_id: str) -> ?dict[str, ?value]:
+    sspec = _get_service_specification_json(tmf_spec, top_schema, sspec_id)
+    if sspec is not None:
+        if isinstance(sspec, dict):
+            return sspec
+
+def get_service_specification_list_json(tmf_spec: dict[str, (name: str, description: str)], top_schema: yang.schema.DRoot) -> list[dict[str, ?value]]:
+    sspecs = _get_service_specification_json(tmf_spec, top_schema)
+    if sspecs is not None:
+        if isinstance(sspecs, list):
+            return sspecs
+    return []
 
 def get_opt_obj_to_json(obj) -> ?dict[str, ?value]:
         o = obj
@@ -1174,8 +1226,8 @@ class TargetEntitySchema(object):
 
 
 def _test_service_catalog_json():
-    data = get_service_catalog_json()
-    return json.encode({"serviceSpecification": data}, pretty=True)
+    data = get_service_catalog_list_json()
+    return json.encode_list(data, pretty=True)
 
 def _test_service_category_json():
     tmf_spec = {
@@ -1184,8 +1236,8 @@ def _test_service_category_json():
             description="Network Infrastructure Router"
         ),
     }
-    data = get_service_category_json(tmf_spec)
-    return json.encode({"serviceCategory": data}, pretty=True)
+    data = get_service_category_list_json(tmf_spec)
+    return json.encode_list(data, pretty=True)
 
 def _test_service_candidate_json():
     tmf_spec = {
@@ -1194,8 +1246,8 @@ def _test_service_candidate_json():
             description="Network Infrastructure Router"
         ),
     }
-    data = get_service_candidate_json(tmf_spec)
-    return json.encode({"serviceCandidate": data}, pretty=True)
+    data = get_service_candidate_list_json(tmf_spec)
+    return json.encode_list(data, pretty=True)
 
 def _test_service_specification_json():
     tmf_spec = {
@@ -1267,5 +1319,5 @@ def _test_service_specification_json():
     }
 }"""
     top_schema = yang.compile([netinfra_schema, edge_schema])
-    data = get_service_specification_json(tmf_spec, top_schema)
-    return json.encode({"serviceSpecification": data}, pretty=True)
+    data = get_service_specification_list_json(tmf_spec, top_schema)
+    return json.encode_list(data, pretty=True)
