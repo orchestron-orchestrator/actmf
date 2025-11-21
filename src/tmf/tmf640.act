@@ -230,6 +230,19 @@ def yang_type_to_tmf_type(yt: str) -> str:
         return "string"
     raise ValueError("Unsupported YANG type: %s" % yt)
 
+def gdata_type_to_tmf_type(v: value) -> str:
+    if isinstance(v, bool):
+        return "boolean"
+    elif isinstance(v, str):
+        return "string"
+    elif isinstance(v, bigint):
+        return "integer"
+    elif isinstance(v, float):
+        return "number"
+    elif isinstance (v, list):
+        return gdata_type_to_tmf_type(v[0])
+    raise ValueError("Unsupported GDATA type: {type(v)}")
+
 def json_type_and_yang_type_match(jt: ?str, yt: ?str) -> bool:
     if jt == "boolean" and yt == "boolean":
         return True
@@ -249,14 +262,17 @@ def add_leaf_properties_to_service_characteristics(gd: yang.gdata.Node, service:
             if isinstance(v, yang.gdata.Leaf):
                 for chr in service.serviceCharacteristic:
                     if chr.name == k:
-                        chr.valueType = yang_type_to_tmf_type(v.t)
-                        chr.value = v.val
+                        chr.valueType = gdata_type_to_tmf_type(v.val)
+                        #FIXME: JSON encoder does not support bigint, convert to int
+                        val = v.val
+                        chr.value = int(val) if isinstance(val, bigint) else val
                         break
             elif isinstance(v, yang.gdata.LeafList):
                 for chr in service.serviceCharacteristic:
                     if chr.name == k:
-                        chr.valueType = "{yang_type_to_tmf_type(v.t)}Array"
-                        chr.value = [item for item in v.vals]
+                        chr.valueType = "{gdata_type_to_tmf_type(v.vals)}Array"
+                        #FIXME: JSON encoder does not support bigint, convert to int
+                        chr.value = [int(item) if isinstance(item, bigint) else item for item in v.vals]
                         break
 
 def get_opt_obj(d: dict[str, ?value], key: str) -> ?dict[str, ?value]:
@@ -376,7 +392,7 @@ def add_leafs_to_gdata(elements: dict[str, yang.gdata.Node], properties: list[(s
     for prop_name, prop_value, prop_type in properties:
         p = prop_value
         if p is not None:
-            elements[prop_name] = yang.gdata.Leaf(prop_type, p)
+            elements[prop_name] = yang.gdata.Leaf(p)
         else:
             raise ValueError("Property {prop_name} is required for gdata")
 
@@ -384,7 +400,7 @@ def add_opt_leafs_to_gdata(elements: dict[str, yang.gdata.Node], properties: lis
     for prop_name, prop_value, prop_type in properties:
         p = prop_value
         if p is not None:
-            elements[prop_name] = yang.gdata.Leaf(prop_type, p)
+            elements[prop_name] = yang.gdata.Leaf(p)
 
 def get_list(val: ?value) -> list[dict[str, ?value]]:
     if isinstance(val, list):
@@ -2319,7 +2335,7 @@ def _test_get_json_netinfra_router():
         'netinfra': yang.gdata.Container({
             'router': yang.gdata.List(['name'], ns='http://example.com/netinfra', module='netinfra', elements=[
             yang.gdata.Container({
-                'name': yang.gdata.Leaf('string', 'ams-core-1')
+                'name': yang.gdata.Leaf('ams-core-1')
             })
             ])
         }, ns='http://example.com/netinfra', module='netinfra'),
@@ -2327,20 +2343,20 @@ def _test_get_json_netinfra_router():
             'tmf640': yang.gdata.Container({
             'service': yang.gdata.List(['id'], elements=[
                 yang.gdata.Container({
-                'id': yang.gdata.Leaf('string', 'netinfra.router(ams-core-1)'),
-                'href': yang.gdata.Leaf('string', '/tmf-api/ServiceActivationAndConfiguration/v4/service/netinfra.router(ams-core-1)'),
-                'hasStarted': yang.gdata.Leaf('boolean', True),
-                'isBundle': yang.gdata.Leaf('boolean', False),
-                'isServiceEnabled': yang.gdata.Leaf('boolean', True),
-                'isStateful': yang.gdata.Leaf('boolean', False),
-                'name': yang.gdata.Leaf('string', 'ams-core-1'),
-                'serviceDate': yang.gdata.Leaf('string', '2024-06-01T12:00:00Z'),
-                'startDate': yang.gdata.Leaf('string', '2024-06-01T12:00:00Z'),
-                'startMode': yang.gdata.Leaf('string', '1'),
-                'state': yang.gdata.Leaf('string', 'active'),
-                'baseType': yang.gdata.Leaf('string', 'Service'),
-                'schemaLocation': yang.gdata.Leaf('string', '/tmf-api/schema/Service/Service.schema.json'),
-                'type': yang.gdata.Leaf('string', 'Service'),
+                'id': yang.gdata.Leaf('netinfra.router(ams-core-1)'),
+                'href': yang.gdata.Leaf('/tmf-api/ServiceActivationAndConfiguration/v4/service/netinfra.router(ams-core-1)'),
+                'hasStarted': yang.gdata.Leaf(True),
+                'isBundle': yang.gdata.Leaf(False),
+                'isServiceEnabled': yang.gdata.Leaf(True),
+                'isStateful': yang.gdata.Leaf(False),
+                'name': yang.gdata.Leaf('ams-core-1'),
+                'serviceDate': yang.gdata.Leaf('2024-06-01T12:00:00Z'),
+                'startDate': yang.gdata.Leaf('2024-06-01T12:00:00Z'),
+                'startMode': yang.gdata.Leaf('1'),
+                'state': yang.gdata.Leaf('active'),
+                'baseType': yang.gdata.Leaf('Service'),
+                'schemaLocation': yang.gdata.Leaf('/tmf-api/schema/Service/Service.schema.json'),
+                'type': yang.gdata.Leaf('Service'),
                 'feature': yang.gdata.List(['id']),
                 'note': yang.gdata.List(['id']),
                 'place': yang.gdata.List(['id']),
@@ -2348,22 +2364,22 @@ def _test_get_json_netinfra_router():
                 'relatedParty': yang.gdata.List(['id']),
                 'serviceCharacteristic': yang.gdata.List(['name'], elements=[
                     yang.gdata.Container({
-                    'id': yang.gdata.Leaf('string', 'name'),
-                    'name': yang.gdata.Leaf('string', 'name'),
-                    'baseType': yang.gdata.Leaf('string', 'Characteristic'),
-                    'schemaLocation': yang.gdata.Leaf('string', '/tmf-api/schema/Service/Characteristic.schema.json'),
-                    'type': yang.gdata.Leaf('string', 'Characteristic'),
+                    'id': yang.gdata.Leaf('name'),
+                    'name': yang.gdata.Leaf('name'),
+                    'baseType': yang.gdata.Leaf('Characteristic'),
+                    'schemaLocation': yang.gdata.Leaf('/tmf-api/schema/Service/Characteristic.schema.json'),
+                    'type': yang.gdata.Leaf('Characteristic'),
                     'characteristicRelationship': yang.gdata.List(['id'])
                     })
                 ]),
                 'serviceOrderItem': yang.gdata.List(['id']),
                 'serviceRelationship': yang.gdata.List(['id']),
                 'serviceSpecification': yang.gdata.Container({
-                    'id': yang.gdata.Leaf('string', 'netinfra.router'),
-                    'baseType': yang.gdata.Leaf('string', 'ServiceSpecificationRef'),
-                    'schemaLocation': yang.gdata.Leaf('string', '/tmf-api/schema/Service/ServiceSpecificationRef.schema.json'),
-                    'type': yang.gdata.Leaf('string', 'ServiceSpecificationRef'),
-                    'referredType': yang.gdata.Leaf('string', 'ServiceSpecification')
+                    'id': yang.gdata.Leaf('netinfra.router'),
+                    'baseType': yang.gdata.Leaf('ServiceSpecificationRef'),
+                    'schemaLocation': yang.gdata.Leaf('/tmf-api/schema/Service/ServiceSpecificationRef.schema.json'),
+                    'type': yang.gdata.Leaf('ServiceSpecificationRef'),
+                    'referredType': yang.gdata.Leaf('ServiceSpecification')
                 }),
                 'supportingResource': yang.gdata.List(['id']),
                 'supportingService': yang.gdata.List(['id'])
@@ -2560,14 +2576,14 @@ def _test_get_json_edge_device_access_interface_vlan():
     layer_config = yang.gdata.Container({
         'edge-device': yang.gdata.List(['device-name'], ns='http://example.com/edge', module='edge', elements=[
             yang.gdata.Container({
-            'device-name': yang.gdata.Leaf('string', 'AM-CORE-1'),
+            'device-name': yang.gdata.Leaf('AM-CORE-1'),
             'access-interface': yang.gdata.List(['interface-name'], ns='http://example.com/edge', module='edge', elements=[
                 yang.gdata.Container({
-                'interface-name': yang.gdata.Leaf('string', 'GigabitEthernet0/1'),
-                'speed': yang.gdata.Leaf('int32', 1000),
+                'interface-name': yang.gdata.Leaf('GigabitEthernet0/1'),
+                'speed': yang.gdata.Leaf(bigint(1000)),
                 'vlan': yang.gdata.List(['vlan-id'], ns='http://example.com/edge', module='edge', elements=[
                     yang.gdata.Container({
-                    'vlan-id': yang.gdata.Leaf('uint16', 100)
+                    'vlan-id': yang.gdata.Leaf(bigint(100))
                     })
                 ])
                 })
@@ -2578,20 +2594,20 @@ def _test_get_json_edge_device_access_interface_vlan():
             'tmf640': yang.gdata.Container({
             'service': yang.gdata.List(['id'], elements=[
                 yang.gdata.Container({
-                'id': yang.gdata.Leaf('string', 'edge-device(AM-CORE-1).access-interface(GigabitEthernet0/1).vlan(100)'),
-                'href': yang.gdata.Leaf('string', '/tmf-api/ServiceActivationAndConfiguration/v4/service/edge-device(AM-CORE-1).access-interface(GigabitEthernet0/1).vlan(100)'),
-                'hasStarted': yang.gdata.Leaf('boolean', True),
-                'isBundle': yang.gdata.Leaf('boolean', False),
-                'isServiceEnabled': yang.gdata.Leaf('boolean', True),
-                'isStateful': yang.gdata.Leaf('boolean', False),
-                'name': yang.gdata.Leaf('string', '100'),
-                'serviceDate': yang.gdata.Leaf('string', '2024-06-01T12:00:00Z'),
-                'startDate': yang.gdata.Leaf('string', '2024-06-01T12:00:00Z'),
-                'startMode': yang.gdata.Leaf('string', '1'),
-                'state': yang.gdata.Leaf('string', 'active'),
-                'baseType': yang.gdata.Leaf('string', 'Service'),
-                'schemaLocation': yang.gdata.Leaf('string', '/tmf-api/schema/Service/Service.schema.json'),
-                'type': yang.gdata.Leaf('string', 'Service'),
+                'id': yang.gdata.Leaf('edge-device(AM-CORE-1).access-interface(GigabitEthernet0/1).vlan(100)'),
+                'href': yang.gdata.Leaf('/tmf-api/ServiceActivationAndConfiguration/v4/service/edge-device(AM-CORE-1).access-interface(GigabitEthernet0/1).vlan(100)'),
+                'hasStarted': yang.gdata.Leaf(True),
+                'isBundle': yang.gdata.Leaf(False),
+                'isServiceEnabled': yang.gdata.Leaf(True),
+                'isStateful': yang.gdata.Leaf(False),
+                'name': yang.gdata.Leaf('100'),
+                'serviceDate': yang.gdata.Leaf('2024-06-01T12:00:00Z'),
+                'startDate': yang.gdata.Leaf('2024-06-01T12:00:00Z'),
+                'startMode': yang.gdata.Leaf('1'),
+                'state': yang.gdata.Leaf('active'),
+                'baseType': yang.gdata.Leaf('Service'),
+                'schemaLocation': yang.gdata.Leaf('/tmf-api/schema/Service/Service.schema.json'),
+                'type': yang.gdata.Leaf('Service'),
                 'feature': yang.gdata.List(['id']),
                 'note': yang.gdata.List(['id']),
                 'place': yang.gdata.List(['id']),
@@ -2599,38 +2615,38 @@ def _test_get_json_edge_device_access_interface_vlan():
                 'relatedParty': yang.gdata.List(['id']),
                 'serviceCharacteristic': yang.gdata.List(['name'], elements=[
                     yang.gdata.Container({
-                    'id': yang.gdata.Leaf('string', 'vlan-id'),
-                    'name': yang.gdata.Leaf('string', 'vlan-id'),
-                    'baseType': yang.gdata.Leaf('string', 'Characteristic'),
-                    'schemaLocation': yang.gdata.Leaf('string', '/tmf-api/schema/Service/Characteristic.schema.json'),
-                    'type': yang.gdata.Leaf('string', 'Characteristic'),
+                    'id': yang.gdata.Leaf('vlan-id'),
+                    'name': yang.gdata.Leaf('vlan-id'),
+                    'baseType': yang.gdata.Leaf('Characteristic'),
+                    'schemaLocation': yang.gdata.Leaf('/tmf-api/schema/Service/Characteristic.schema.json'),
+                    'type': yang.gdata.Leaf('Characteristic'),
                     'characteristicRelationship': yang.gdata.List(['id'])
                     })
                 ]),
                 'serviceOrderItem': yang.gdata.List(['id']),
                 'serviceRelationship': yang.gdata.List(['id']),
                 'serviceSpecification': yang.gdata.Container({
-                    'id': yang.gdata.Leaf('string', 'edge-device.access-interface.vlan'),
-                    'baseType': yang.gdata.Leaf('string', 'ServiceSpecificationRef'),
-                    'schemaLocation': yang.gdata.Leaf('string', '/tmf-api/schema/Service/ServiceSpecificationRef.schema.json'),
-                    'type': yang.gdata.Leaf('string', 'ServiceSpecificationRef'),
-                    'referredType': yang.gdata.Leaf('string', 'ServiceSpecification')
+                    'id': yang.gdata.Leaf('edge-device.access-interface.vlan'),
+                    'baseType': yang.gdata.Leaf('ServiceSpecificationRef'),
+                    'schemaLocation': yang.gdata.Leaf('/tmf-api/schema/Service/ServiceSpecificationRef.schema.json'),
+                    'type': yang.gdata.Leaf('ServiceSpecificationRef'),
+                    'referredType': yang.gdata.Leaf('ServiceSpecification')
                 }),
                 'supportingResource': yang.gdata.List(['id']),
                 'supportingService': yang.gdata.List(['id'], elements=[
                     yang.gdata.Container({
-                    'id': yang.gdata.Leaf('string', 'edge-device(AM-CORE-1).access-interface(GigabitEthernet0/1)'),
-                    'href': yang.gdata.Leaf('string', '/tmf-api/ServiceActivationAndConfiguration/v4/service/edge-device(AM-CORE-1).access-interface(GigabitEthernet0/1)'),
-                    'name': yang.gdata.Leaf('string', 'GigabitEthernet0/1'),
-                    'baseType': yang.gdata.Leaf('string', 'ServiceRefOrValue'),
-                    'schemaLocation': yang.gdata.Leaf('string', '/tmf-api/schema/Service/ServiceRefOrValue.schema.json'),
-                    'type': yang.gdata.Leaf('string', 'ServiceRefOrValue'),
+                    'id': yang.gdata.Leaf('edge-device(AM-CORE-1).access-interface(GigabitEthernet0/1)'),
+                    'href': yang.gdata.Leaf('/tmf-api/ServiceActivationAndConfiguration/v4/service/edge-device(AM-CORE-1).access-interface(GigabitEthernet0/1)'),
+                    'name': yang.gdata.Leaf('GigabitEthernet0/1'),
+                    'baseType': yang.gdata.Leaf('ServiceRefOrValue'),
+                    'schemaLocation': yang.gdata.Leaf('/tmf-api/schema/Service/ServiceRefOrValue.schema.json'),
+                    'type': yang.gdata.Leaf('ServiceRefOrValue'),
                     'serviceSpecification': yang.gdata.Container({
-                        'id': yang.gdata.Leaf('string', 'edge-device.access-interface'),
-                        'baseType': yang.gdata.Leaf('string', 'ServiceSpecificationRef'),
-                        'schemaLocation': yang.gdata.Leaf('string', '/tmf-api/schema/Service/ServiceSpecificationRef.schema.json'),
-                        'type': yang.gdata.Leaf('string', 'ServiceSpecificationRef'),
-                        'referredType': yang.gdata.Leaf('string', 'ServiceSpecification')
+                        'id': yang.gdata.Leaf('edge-device.access-interface'),
+                        'baseType': yang.gdata.Leaf('ServiceSpecificationRef'),
+                        'schemaLocation': yang.gdata.Leaf('/tmf-api/schema/Service/ServiceSpecificationRef.schema.json'),
+                        'type': yang.gdata.Leaf('ServiceSpecificationRef'),
+                        'referredType': yang.gdata.Leaf('ServiceSpecification')
                     }),
                     'feature': yang.gdata.List(['id']),
                     'note': yang.gdata.List(['id']),
@@ -2639,19 +2655,19 @@ def _test_get_json_edge_device_access_interface_vlan():
                     'relatedParty': yang.gdata.List(['id']),
                     'serviceCharacteristic': yang.gdata.List(['id'], elements=[
                         yang.gdata.Container({
-                        'id': yang.gdata.Leaf('string', 'interface-name'),
-                        'name': yang.gdata.Leaf('string', 'interface-name'),
-                        'baseType': yang.gdata.Leaf('string', 'Characteristic'),
-                        'schemaLocation': yang.gdata.Leaf('string', '/tmf-api/schema/Service/Characteristic.schema.json'),
-                        'type': yang.gdata.Leaf('string', 'Characteristic'),
+                        'id': yang.gdata.Leaf('interface-name'),
+                        'name': yang.gdata.Leaf('interface-name'),
+                        'baseType': yang.gdata.Leaf('Characteristic'),
+                        'schemaLocation': yang.gdata.Leaf('/tmf-api/schema/Service/Characteristic.schema.json'),
+                        'type': yang.gdata.Leaf('Characteristic'),
                         'characteristicRelationship': yang.gdata.List(['id'])
                         }),
                         yang.gdata.Container({
-                        'id': yang.gdata.Leaf('string', 'speed'),
-                        'name': yang.gdata.Leaf('string', 'speed'),
-                        'baseType': yang.gdata.Leaf('string', 'Characteristic'),
-                        'schemaLocation': yang.gdata.Leaf('string', '/tmf-api/schema/Service/Characteristic.schema.json'),
-                        'type': yang.gdata.Leaf('string', 'Characteristic'),
+                        'id': yang.gdata.Leaf('speed'),
+                        'name': yang.gdata.Leaf('speed'),
+                        'baseType': yang.gdata.Leaf('Characteristic'),
+                        'schemaLocation': yang.gdata.Leaf('/tmf-api/schema/Service/Characteristic.schema.json'),
+                        'type': yang.gdata.Leaf('Characteristic'),
                         'characteristicRelationship': yang.gdata.List(['id'])
                         })
                     ]),
@@ -2660,18 +2676,18 @@ def _test_get_json_edge_device_access_interface_vlan():
                     'supportingResource': yang.gdata.List(['id']),
                     'supportingService': yang.gdata.List(['id'], elements=[
                         yang.gdata.Container({
-                        'id': yang.gdata.Leaf('string', 'edge-device(AM-CORE-1)'),
-                        'href': yang.gdata.Leaf('string', '/tmf-api/ServiceActivationAndConfiguration/v4/service/edge-device(AM-CORE-1)'),
-                        'name': yang.gdata.Leaf('string', 'AM-CORE-1'),
-                        'baseType': yang.gdata.Leaf('string', 'ServiceRefOrValue'),
-                        'schemaLocation': yang.gdata.Leaf('string', '/tmf-api/schema/Service/ServiceRefOrValue.schema.json'),
-                        'type': yang.gdata.Leaf('string', 'ServiceRefOrValue'),
+                        'id': yang.gdata.Leaf('edge-device(AM-CORE-1)'),
+                        'href': yang.gdata.Leaf('/tmf-api/ServiceActivationAndConfiguration/v4/service/edge-device(AM-CORE-1)'),
+                        'name': yang.gdata.Leaf('AM-CORE-1'),
+                        'baseType': yang.gdata.Leaf('ServiceRefOrValue'),
+                        'schemaLocation': yang.gdata.Leaf('/tmf-api/schema/Service/ServiceRefOrValue.schema.json'),
+                        'type': yang.gdata.Leaf('ServiceRefOrValue'),
                         'serviceSpecification': yang.gdata.Container({
-                            'id': yang.gdata.Leaf('string', 'edge-device'),
-                            'baseType': yang.gdata.Leaf('string', 'ServiceSpecificationRef'),
-                            'schemaLocation': yang.gdata.Leaf('string', '/tmf-api/schema/Service/ServiceSpecificationRef.schema.json'),
-                            'type': yang.gdata.Leaf('string', 'ServiceSpecificationRef'),
-                            'referredType': yang.gdata.Leaf('string', 'ServiceSpecification')
+                            'id': yang.gdata.Leaf('edge-device'),
+                            'baseType': yang.gdata.Leaf('ServiceSpecificationRef'),
+                            'schemaLocation': yang.gdata.Leaf('/tmf-api/schema/Service/ServiceSpecificationRef.schema.json'),
+                            'type': yang.gdata.Leaf('ServiceSpecificationRef'),
+                            'referredType': yang.gdata.Leaf('ServiceSpecification')
                         }),
                         'feature': yang.gdata.List(['id']),
                         'note': yang.gdata.List(['id']),
@@ -2680,11 +2696,11 @@ def _test_get_json_edge_device_access_interface_vlan():
                         'relatedParty': yang.gdata.List(['id']),
                         'serviceCharacteristic': yang.gdata.List(['id'], elements=[
                             yang.gdata.Container({
-                            'id': yang.gdata.Leaf('string', 'device-name'),
-                            'name': yang.gdata.Leaf('string', 'device-name'),
-                            'baseType': yang.gdata.Leaf('string', 'Characteristic'),
-                            'schemaLocation': yang.gdata.Leaf('string', '/tmf-api/schema/Service/Characteristic.schema.json'),
-                            'type': yang.gdata.Leaf('string', 'Characteristic'),
+                            'id': yang.gdata.Leaf('device-name'),
+                            'name': yang.gdata.Leaf('device-name'),
+                            'baseType': yang.gdata.Leaf('Characteristic'),
+                            'schemaLocation': yang.gdata.Leaf('/tmf-api/schema/Service/Characteristic.schema.json'),
+                            'type': yang.gdata.Leaf('Characteristic'),
                             'characteristicRelationship': yang.gdata.List(['id'])
                             })
                         ]),
