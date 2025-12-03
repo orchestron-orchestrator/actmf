@@ -5,10 +5,10 @@ Container({
       'access-interface': List(['interface-name'], ns='http://example.com/edge', module='edge', elements=[
         Container({
           'interface-name': Leaf('string', 'GigabitEthernet0/1'),
-          'speed': Leaf('int32', 1000),
+          'speed': Leaf('int32', bigint(1000)),
           'vlan': List(['vlan-id'], ns='http://example.com/edge', module='edge', elements=[
             Container({
-              'vlan-id': Leaf('uint16', 100)
+              'vlan-id': Leaf('uint16', bigint(100))
             })
           ])
         })

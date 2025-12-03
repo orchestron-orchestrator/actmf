@@ -1,3 +1,4 @@
+import base64
 import json
 import testing
 import time
@@ -5,6 +6,7 @@ import time
 import yang
 import yang.gdata
 import yang.gen3
+from yang.identityref import Identityref, PartialIdentityref
 import yang.schema
 
 extension list[Characteristic] (yang.gen3.YangData):
@@ -18,26 +20,123 @@ extension list[Characteristic] (yang.gen3.YangData):
         if isinstance(self, list):
             for entry in self:
                 if isinstance(entry, Characteristic):
-                    entry_value = entry.value
-                    if entry.name == name and entry_value is not None:
+                    leaf_value = entry.value
+                    if entry.name == name and leaf_value is not None:
+                        new_path = path + [yang.gen3.PathElement(schema)]
                         if json_type_and_yang_type_match(entry.valueType, schema.type_.name):
-                            return (schema.type_.name, entry.value)
-                        raise yang.gen3.YangValidationError(path, schema.type_, entry_value)
+                            if isinstance(leaf_value, str):
+                                if schema.type_.name == "identityref":
+                                    return (t="identityref", val=Identityref.from_json(leaf_value))
+                                elif schema.type_.name == "binary":
+                                    return (t="binary", val=base64.decode(leaf_value.encode()))
+                                result = yang.gen3.try_parse_value(leaf_value, schema.type_, new_path)
+                                return result
+                            else:
+                                # Special-case empty leaf JSON encoding: [null]
+                                if schema.type_.name == "empty":
+                                    if isinstance(leaf_value, list) and len(leaf_value) == 1 and leaf_value[0] is None:
+                                        return (t="empty", val=True)
+                                    else:
+                                        raise ValueError(f"Expected [null] for empty leaf {name}, got {leaf_value}")
+                                concrete_type = schema.type_.name
+                                if concrete_type == "union":
+                                    for member_type in schema.type_.type_:
+                                        member_name = member_type.name
+                                        if isinstance(leaf_value, bool) and member_name == "boolean":
+                                            concrete_type = "boolean"
+                                            break
+                                        elif isinstance(leaf_value, int) or isinstance(leaf_value, bigint):
+                                            #bigint_leaf_value = bigint(leaf_value)
+                                            if member_name in ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"]:
+                                                concrete_type = "bigint"
+                                                break
+                                                #range_obj = member_type.range_
+                                                #if range_obj is not None:
+                                                #    if yang.gen3.validate_int_range(bigint_leaf_value, range_obj.value, member_name):
+                                                #        concrete_type = member_name
+                                                #        break
+                                                #else:
+                                                #    concrete_type = member_name
+                                                #    break
+                                        elif isinstance(leaf_value, float) and member_name == "decimal64":
+                                            concrete_type = "decimal64"
+                                            break
+                                range_obj = schema.type_.range_
+                                if range_obj is not None:
+                                    #if isinstance(leaf_value, int) or isinstance(leaf_value, bigint):
+                                    #    bigint_leaf_value = bigint(leaf_value)
+                                    #    if not yang.gen3.validate_int_range(bigint_leaf_value, range_obj.value, concrete_type):
+                                    #        raise yang.gen3.YangValidationError(new_path, schema.type_, str(leaf_value))
+                                    if isinstance(leaf_value, float):
+                                        if not yang.gen3.validate_decimal_range(leaf_value, range_obj.value):
+                                            raise yang.gen3.YangValidationError(new_path, schema.type_, str(leaf_value))
+                                if isinstance(leaf_value, int):
+                                    return (t=concrete_type, val=bigint(leaf_value))
+                                return (t=concrete_type, val=leaf_value)
+                        raise yang.gen3.YangValidationError(path, schema.type_, leaf_value)
 
     def take_leaflist(self, schema: yang.schema.DLeafList, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.gen3.PathElement]=[]) -> list[(t: str, val: ?value)]:
         if isinstance(self, list):
             for entry in self:
                 if isinstance(entry, Characteristic):
-                    entry_value = entry.value
+                    leaflist_data = entry.value
                     entry_value_type = entry.valueType
-                    if entry.name == name and entry_value is not None and entry_value_type is not None:
+                    if entry.name == name and leaflist_data is not None and entry_value_type is not None:
                         if json_type_and_yang_type_match(entry_value_type[:-5] if entry_value_type.endswith("Array") else entry_value_type, schema.type_.name):
-                            if isinstance(entry_value, list):
-                                ret = []
-                                for v in entry_value:
-                                    ret.append((schema.type_.name, v))
-                                return ret
-                        raise yang.gen3.YangValidationError(path, schema.type_, entry_value)
+                            if isinstance(leaflist_data, list):
+                                new_path = path + [yang.gen3.PathElement(schema)]
+                                values: list[(t: str, val: ?value)] = []
+                                if schema.type_.name == "identityref":
+                                    for item in leaflist_data:
+                                        if isinstance(item, str):
+                                            values.append((t="identityref", val=Identityref.from_json(item)))
+                                        else:
+                                            raise ValueError(f"Expected string for identityref in leaf-list {name}, got {type(item)}")
+                                    return values
+                                elif schema.type_.name == "binary":
+                                    for item in leaflist_data:
+                                        if isinstance(item, str):
+                                            values.append((t="binary", val=base64.decode(item.encode())))
+                                        else:
+                                            raise ValueError(f"Expected string for binary in leaf-list {name}, got {type(item)}")
+                                    return values
+                                new_path = path + [yang.gen3.PathElement(schema)]
+                                for item in leaflist_data:
+                                    if isinstance(item, str):
+                                        tv = yang.gen3.try_parse_value(item, schema.type_, new_path)
+                                        values.append(tv)
+                                    else:
+                                        concrete_type = schema.type_.name
+                                        if concrete_type == "union":
+                                            for member_type in schema.type_.type_:
+                                                member_name = member_type.name
+                                                if isinstance(item, bool) and member_name == "boolean":
+                                                    concrete_type = "boolean"
+                                                    break
+                                                elif isinstance(item, bigint) and not isinstance(item, bool):
+                                                    if member_name in ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"]:
+                                                        range_obj = member_type.range_
+                                                        if range_obj is not None:
+                                                            if yang.gen3.validate_int_range(item, range_obj.value, member_name):
+                                                                concrete_type = member_name
+                                                                break
+                                                        else:
+                                                            concrete_type = member_name
+                                                            break
+                                                elif isinstance(item, float) and member_name == "decimal64":
+                                                    concrete_type = "decimal64"
+                                                    break
+                                        range_obj = schema.type_.range_
+                                        if range_obj is not None:
+                                            if isinstance(item, bigint) and not isinstance(item, bool):
+                                                if not yang.gen3.validate_int_range(item, range_obj.value, concrete_type):
+                                                    raise yang.gen3.YangValidationError(new_path, schema.type_, str(item))
+                                            elif isinstance(item, float):
+                                                if not yang.gen3.validate_decimal_range(item, range_obj.value):
+                                                    raise yang.gen3.YangValidationError(new_path, schema.type_, str(item))
+                                        values.append((t=concrete_type, val=item))
+                                return values
+                        raise yang.gen3.YangValidationError(path, schema.type_, leaflist_data)
         return []
 
 def _get_service_json(layer_config: yang.gdata.Node, service_id: ?str = None) -> ?value:
@@ -119,10 +218,10 @@ def get_key_value(gd: yang.gdata.Node, schema: yang.schema.DNode) -> str:
                 val = v.val
                 if isinstance(val, str):
                     return val
-                elif isinstance(val, int):
+                elif isinstance(val, bigint):
                     return str(val)
                 else:
-                    raise NotImplementedError(f"Service characteristic key {key} is of type {type(val)}, expected str or int")
+                    raise NotImplementedError(f"Service characteristic key {key} is of type {type(val)}, expected str or bigint")
             else:
                 raise NotImplementedError(f"Service characteristic key {key} is of type {type(v)}, expected Leaf")
         except KeyError:
