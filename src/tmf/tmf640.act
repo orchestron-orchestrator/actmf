@@ -341,13 +341,19 @@ def add_leaf_properties_to_service_characteristics(gd: yang.gdata.Node, service:
                 for chr in service.serviceCharacteristic:
                     if chr.name == k:
                         chr.valueType = yang_type_to_tmf_type(v.t)
-                        chr.value = v.val
+                        #FIXME: JSON encoder does not support bigint, convert to int
+                        val = v.val
+                        if isinstance(val, bigint):
+                            chr.value = int(val)
+                        else:
+                            chr.value = val
                         break
             elif isinstance(v, yang.gdata.LeafList):
                 for chr in service.serviceCharacteristic:
                     if chr.name == k:
                         chr.valueType = "{yang_type_to_tmf_type(v.t)}Array"
-                        chr.value = v.vals
+                        #FIXME: JSON encoder does not support bigint, convert to int
+                        chr.value = [int(item) if isinstance(item, bigint) else item for item in v.vals]
                         break
 
 def get_opt_obj(d: dict[str, ?value], key: str) -> ?dict[str, ?value]:
