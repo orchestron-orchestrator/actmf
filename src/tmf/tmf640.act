@@ -8,13 +8,13 @@ import yang.gen3
 import yang.schema
 
 extension list[Characteristic] (yang.gen3.YangData):
-    def take_container(self, schema: yang.schema.DContainer, name: str, ns: ?str=None, path: list[yang.gen3.PathElement]=[]) -> ?value:
+    def take_container(self, schema: yang.schema.DContainer, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.gen3.PathElement]=[]) -> ?value:
         return None
 
-    def take_list(self, schema: yang.schema.DList, name: str, ns: ?str=None, path: list[yang.gen3.PathElement]=[]) -> list[value]:
+    def take_list(self, schema: yang.schema.DList, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.gen3.PathElement]=[]) -> list[value]:
         return []
 
-    def take_leaf(self, schema: yang.schema.DLeaf, name: str, ns: ?str=None, path: list[yang.gen3.PathElement]=[]) -> ?(t: str, val: ?value):
+    def take_leaf(self, schema: yang.schema.DLeaf, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.gen3.PathElement]=[]) -> ?(t: str, val: ?value):
         if isinstance(self, list):
             for entry in self:
                 if isinstance(entry, Characteristic):
@@ -24,7 +24,7 @@ extension list[Characteristic] (yang.gen3.YangData):
                             return (schema.type_.name, entry.value)
                         raise yang.gen3.YangValidationError(path, schema.type_, entry_value)
 
-    def take_leaflist(self, schema: yang.schema.DLeafList, name: str, ns: ?str=None, path: list[yang.gen3.PathElement]=[]) -> list[(t: str, val: ?value)]:
+    def take_leaflist(self, schema: yang.schema.DLeafList, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.gen3.PathElement]=[]) -> list[(t: str, val: ?value)]:
         if isinstance(self, list):
             for entry in self:
                 if isinstance(entry, Characteristic):
