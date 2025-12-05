@@ -45,28 +45,26 @@ extension list[Characteristic] (yang.gen3.YangData):
                                         if isinstance(leaf_value, bool) and member_name == "boolean":
                                             concrete_type = "boolean"
                                             break
-                                        elif isinstance(leaf_value, int) or isinstance(leaf_value, bigint):
-                                            #bigint_leaf_value = bigint(leaf_value)
+                                        elif isinstance(leaf_value, atom) and (isinstance(leaf_value, int) or isinstance(leaf_value, bigint)):
+                                            bigint_leaf_value = bigint(leaf_value)
                                             if member_name in ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"]:
-                                                concrete_type = "bigint"
-                                                break
-                                                #range_obj = member_type.range_
-                                                #if range_obj is not None:
-                                                #    if yang.gen3.validate_int_range(bigint_leaf_value, range_obj.value, member_name):
-                                                #        concrete_type = member_name
-                                                #        break
-                                                #else:
-                                                #    concrete_type = member_name
-                                                #    break
+                                                range_obj = member_type.range_
+                                                if range_obj is not None:
+                                                    if yang.gen3.validate_int_range(bigint_leaf_value, range_obj.value, member_name):
+                                                        concrete_type = member_name
+                                                        break
+                                                else:
+                                                    concrete_type = member_name
+                                                    break
                                         elif isinstance(leaf_value, float) and member_name == "decimal64":
                                             concrete_type = "decimal64"
                                             break
                                 range_obj = schema.type_.range_
                                 if range_obj is not None:
-                                    #if isinstance(leaf_value, int) or isinstance(leaf_value, bigint):
-                                    #    bigint_leaf_value = bigint(leaf_value)
-                                    #    if not yang.gen3.validate_int_range(bigint_leaf_value, range_obj.value, concrete_type):
-                                    #        raise yang.gen3.YangValidationError(new_path, schema.type_, str(leaf_value))
+                                    if isinstance(leaf_value, atom) and (isinstance(leaf_value, int) or isinstance(leaf_value, bigint)):
+                                        bigint_leaf_value = bigint(leaf_value)
+                                        if not yang.gen3.validate_int_range(bigint_leaf_value, range_obj.value, concrete_type):
+                                            raise yang.gen3.YangValidationError(new_path, schema.type_, str(leaf_value))
                                     if isinstance(leaf_value, float):
                                         if not yang.gen3.validate_decimal_range(leaf_value, range_obj.value):
                                             raise yang.gen3.YangValidationError(new_path, schema.type_, str(leaf_value))
