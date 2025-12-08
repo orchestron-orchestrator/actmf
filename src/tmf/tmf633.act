@@ -216,6 +216,8 @@ def _get_service_specification_json(tmf_spec: dict[str, (name: str, description:
         if isinstance(schema, yang.schema.DList):
             for child in schema.children:
                 if isinstance(child, yang.schema.DLeaf):
+                    child_type = child.type_
+                    patterns = child_type.patterns if isinstance(child_type, yang.schema.DTypeString) else []
                     spec_characteristic = CharacteristicSpecification(
                         id=child.name,
                         configurable=True,
@@ -225,8 +227,8 @@ def _get_service_specification_json(tmf_spec: dict[str, (name: str, description:
                         maxCardinality=1,
                         minCardinality=1 if child.name in schema.key or child.mandatory else 0,
                         name=child.name,
-                        regex=child.type_.pattern[0].value if child.type_.pattern else None,  # TODO: What regex flavor does TMF expect?
-                        valueType=tmf.tmf640.yang_type_to_tmf_type(child.type_.name),
+                        regex=patterns[0].get_yang_regex() if patterns else None,  # TODO: What regex flavor does TMF expect?
+                        valueType=tmf.tmf640.yang_type_to_tmf_type(child_type.builtin_type),
                         charSpecRelationship=[],
                         characteristicValueSpecification=[],
                         validFor=TimePeriod(
@@ -238,13 +240,13 @@ def _get_service_specification_json(tmf_spec: dict[str, (name: str, description:
                         type="CharacteristicSpecification",
                         valueSchemaLocation=None  # When to set this?
                     )
-                    if child.type_.name == "enumeration":
-                        for enum_value in child.type_.enum:
+                    if isinstance(child_type, yang.schema.DTypeEnum):
+                        for enum_value in child_type.name_to_val:
                             spec_characteristic.characteristicValueSpecification.append(
                                 CharacteristicValueSpecification(
-                                    value=enum_value.name,
+                                    value=enum_value,
                                     valueType="string",
-                                    isDefault=enum_value.name == child.default,
+                                    isDefault=enum_value == child.default,
                                     validFor=TimePeriod(
                                         endDateTime=None,
                                         startDateTime="1970-01-01T00:00:00"
@@ -258,7 +260,7 @@ def _get_service_specification_json(tmf_spec: dict[str, (name: str, description:
                         spec_characteristic.characteristicValueSpecification.append(
                             CharacteristicValueSpecification(
                                 value=child.default,
-                                valueType=tmf.tmf640.yang_type_to_tmf_type(child.type_.name),
+                                valueType=tmf.tmf640.yang_type_to_tmf_type(child_type.builtin_type),
                                 isDefault=True,
                                 validFor=TimePeriod(
                                     endDateTime=None,
@@ -271,6 +273,8 @@ def _get_service_specification_json(tmf_spec: dict[str, (name: str, description:
                         )
                     sspec.specCharacteristic.append(spec_characteristic)
                 elif isinstance(child, yang.schema.DLeafList):
+                    child_type = child.type_
+                    patterns = child_type.patterns if isinstance(child_type, yang.schema.DTypeString) else []
                     spec_characteristic = CharacteristicSpecification(
                         id=child.name,
                         configurable=True,
@@ -280,8 +284,8 @@ def _get_service_specification_json(tmf_spec: dict[str, (name: str, description:
                         maxCardinality=child.max_elements,
                         minCardinality=child.min_elements or 1 if child.name in schema.key else 0,
                         name=child.name,
-                        regex=child.type_.pattern[0].value if child.type_.pattern else None,  # TODO: What regex flavor does TMF expect?
-                        valueType="{tmf.tmf640.yang_type_to_tmf_type(child.type_.name)}Array",
+                        regex=patterns[0].get_yang_regex() if patterns else None,  # TODO: What regex flavor does TMF expect?
+                        valueType="{tmf.tmf640.yang_type_to_tmf_type(child_type.builtin_type)}Array",
                         charSpecRelationship=[],
                         characteristicValueSpecification=[],
                         validFor=TimePeriod(
@@ -294,13 +298,13 @@ def _get_service_specification_json(tmf_spec: dict[str, (name: str, description:
                         valueSchemaLocation=None  # When to set this?
                     )
                     child_default = child.default
-                    if child.type_.name == "enumeration":
-                        for enum_value in child.type_.enum:
+                    if isinstance(child_type, yang.schema.DTypeEnum):
+                        for enum_value in child_type.name_to_val:
                             spec_characteristic.characteristicValueSpecification.append(
                                 CharacteristicValueSpecification(
-                                    value=enum_value.name,
+                                    value=enum_value,
                                     valueType="string",
-                                    isDefault=enum_value.name in child_default if child_default is not None else False,
+                                    isDefault=enum_value in child_default if child_default is not None else False,
                                     validFor=TimePeriod(
                                         endDateTime=None,
                                         startDateTime="1970-01-01T00:00:00"
@@ -315,7 +319,7 @@ def _get_service_specification_json(tmf_spec: dict[str, (name: str, description:
                             spec_characteristic.characteristicValueSpecification.append(
                                 CharacteristicValueSpecification(
                                     value=default_value,
-                                    valueType=tmf.tmf640.yang_type_to_tmf_type(child.type_.name),
+                                    valueType=tmf.tmf640.yang_type_to_tmf_type(child_type.builtin_type),
                                     isDefault=True,
                                     validFor=TimePeriod(
                                         endDateTime=None,
@@ -797,7 +801,7 @@ class ServiceSpecRelationship(object):
         self.schemaLocation = schemaLocation
         self.type = type
         self.referredType = referredType
-    
+
     def to_json(self) -> dict[str, ?value]:
         return {
             "id": self.id,
@@ -861,7 +865,7 @@ class FeatureSpecificationCharacteristicRelationship(object):
     resourceSpecificationHref: ?str
     resourceSpecificationId: ?str
     validFor: ?TimePeriod
-    
+
     def __init__(self, characteristicId: ?str, featureId: ?str, name: ?str, relationshipType: ?str, resourceSpecificationHref: ?str, resourceSpecificationId: ?str, validFor: ?TimePeriod):
         self.characteristicId = characteristicId
         self.featureId = featureId
