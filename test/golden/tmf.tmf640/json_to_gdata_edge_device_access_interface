@@ -1,11 +1,11 @@
 Container({
   'edge-device': List(['device-name'], ns='http://example.com/edge', module='edge', elements=[
     Container({
-      'device-name': Leaf('string', 'AM-CORE-1'),
+      'device-name': Leaf('AM-CORE-1'),
       'access-interface': List(['interface-name'], ns='http://example.com/edge', module='edge', elements=[
         Container({
-          'interface-name': Leaf('string', 'GigabitEthernet0/1'),
-          'speed': Leaf('int32', bigint(1000))
+          'interface-name': Leaf('GigabitEthernet0/1'),
+          'speed': Leaf(bigint(1000))
         })
       ])
     })
@@ -14,18 +14,18 @@ Container({
     'tmf640': Container({
       'service': List(['id'], elements=[
         Container({
-          'id': Leaf('string', 'edge-device(AM-CORE-1).access-interface(GigabitEthernet0/1)'),
-          'href': Leaf('string', '/tmf-api/ServiceActivationAndConfiguration/v4/service/edge-device(AM-CORE-1).access-interface(GigabitEthernet0/1)'),
-          'hasStarted': Leaf('boolean', True),
-          'isBundle': Leaf('boolean', False),
-          'isServiceEnabled': Leaf('boolean', True),
-          'isStateful': Leaf('boolean', False),
-          'name': Leaf('string', 'GigabitEthernet0/1'),
-          'startMode': Leaf('string', '1'),
-          'state': Leaf('string', 'active'),
-          'baseType': Leaf('string', 'Service'),
-          'schemaLocation': Leaf('string', '/tmf-api/schema/Service/Service.schema.json'),
-          'type': Leaf('string', 'Service'),
+          'id': Leaf('edge-device(AM-CORE-1).access-interface(GigabitEthernet0/1)'),
+          'href': Leaf('/tmf-api/ServiceActivationAndConfiguration/v4/service/edge-device(AM-CORE-1).access-interface(GigabitEthernet0/1)'),
+          'hasStarted': Leaf(True),
+          'isBundle': Leaf(False),
+          'isServiceEnabled': Leaf(True),
+          'isStateful': Leaf(False),
+          'name': Leaf('GigabitEthernet0/1'),
+          'startMode': Leaf('1'),
+          'state': Leaf('active'),
+          'baseType': Leaf('Service'),
+          'schemaLocation': Leaf('/tmf-api/schema/Service/Service.schema.json'),
+          'type': Leaf('Service'),
           'feature': List(['id']),
           'note': List(['id']),
           'place': List(['id']),
@@ -33,46 +33,46 @@ Container({
           'relatedParty': List(['id']),
           'serviceCharacteristic': List(['name'], elements=[
             Container({
-              'id': Leaf('string', 'interface-name'),
-              'name': Leaf('string', 'interface-name'),
-              'baseType': Leaf('string', 'Characteristic'),
-              'schemaLocation': Leaf('string', '/tmf-api/schema/Service/Characteristic.schema.json'),
-              'type': Leaf('string', 'Characteristic'),
+              'id': Leaf('interface-name'),
+              'name': Leaf('interface-name'),
+              'baseType': Leaf('Characteristic'),
+              'schemaLocation': Leaf('/tmf-api/schema/Service/Characteristic.schema.json'),
+              'type': Leaf('Characteristic'),
               'characteristicRelationship': List(['id'])
             }),
             Container({
-              'id': Leaf('string', 'speed'),
-              'name': Leaf('string', 'speed'),
-              'baseType': Leaf('string', 'Characteristic'),
-              'schemaLocation': Leaf('string', '/tmf-api/schema/Service/Characteristic.schema.json'),
-              'type': Leaf('string', 'Characteristic'),
+              'id': Leaf('speed'),
+              'name': Leaf('speed'),
+              'baseType': Leaf('Characteristic'),
+              'schemaLocation': Leaf('/tmf-api/schema/Service/Characteristic.schema.json'),
+              'type': Leaf('Characteristic'),
               'characteristicRelationship': List(['id'])
             })
           ]),
           'serviceOrderItem': List(['id']),
           'serviceRelationship': List(['id']),
           'serviceSpecification': Container({
-            'id': Leaf('string', 'edge-device.access-interface'),
-            'baseType': Leaf('string', 'ServiceSpecificationRef'),
-            'schemaLocation': Leaf('string', '/tmf-api/schema/Service/ServiceSpecificationRef.schema.json'),
-            'type': Leaf('string', 'ServiceSpecificationRef'),
-            'referredType': Leaf('string', 'ServiceSpecification')
+            'id': Leaf('edge-device.access-interface'),
+            'baseType': Leaf('ServiceSpecificationRef'),
+            'schemaLocation': Leaf('/tmf-api/schema/Service/ServiceSpecificationRef.schema.json'),
+            'type': Leaf('ServiceSpecificationRef'),
+            'referredType': Leaf('ServiceSpecification')
           }),
           'supportingResource': List(['id']),
           'supportingService': List(['id'], elements=[
             Container({
-              'id': Leaf('string', 'edge-device(AM-CORE-1)'),
-              'href': Leaf('string', '/tmf-api/ServiceActivationAndConfiguration/v4/service/edge-device(AM-CORE-1)'),
-              'name': Leaf('string', 'AM-CORE-1'),
-              'baseType': Leaf('string', 'ServiceRefOrValue'),
-              'schemaLocation': Leaf('string', '/tmf-api/schema/Service/ServiceRefOrValue.schema.json'),
-              'type': Leaf('string', 'ServiceRefOrValue'),
+              'id': Leaf('edge-device(AM-CORE-1)'),
+              'href': Leaf('/tmf-api/ServiceActivationAndConfiguration/v4/service/edge-device(AM-CORE-1)'),
+              'name': Leaf('AM-CORE-1'),
+              'baseType': Leaf('ServiceRefOrValue'),
+              'schemaLocation': Leaf('/tmf-api/schema/Service/ServiceRefOrValue.schema.json'),
+              'type': Leaf('ServiceRefOrValue'),
               'serviceSpecification': Container({
-                'id': Leaf('string', 'edge-device'),
-                'baseType': Leaf('string', 'ServiceSpecificationRef'),
-                'schemaLocation': Leaf('string', '/tmf-api/schema/Service/ServiceSpecificationRef.schema.json'),
-                'type': Leaf('string', 'ServiceSpecificationRef'),
-                'referredType': Leaf('string', 'ServiceSpecification')
+                'id': Leaf('edge-device'),
+                'baseType': Leaf('ServiceSpecificationRef'),
+                'schemaLocation': Leaf('/tmf-api/schema/Service/ServiceSpecificationRef.schema.json'),
+                'type': Leaf('ServiceSpecificationRef'),
+                'referredType': Leaf('ServiceSpecification')
               }),
               'feature': List(['id']),
               'note': List(['id']),
@@ -81,11 +81,11 @@ Container({
               'relatedParty': List(['id']),
               'serviceCharacteristic': List(['id'], elements=[
                 Container({
-                  'id': Leaf('string', 'device-name'),
-                  'name': Leaf('string', 'device-name'),
-                  'baseType': Leaf('string', 'Characteristic'),
-                  'schemaLocation': Leaf('string', '/tmf-api/schema/Service/Characteristic.schema.json'),
-                  'type': Leaf('string', 'Characteristic'),
+                  'id': Leaf('device-name'),
+                  'name': Leaf('device-name'),
+                  'baseType': Leaf('Characteristic'),
+                  'schemaLocation': Leaf('/tmf-api/schema/Service/Characteristic.schema.json'),
+                  'type': Leaf('Characteristic'),
                   'characteristicRelationship': List(['id'])
                 })
               ]),
