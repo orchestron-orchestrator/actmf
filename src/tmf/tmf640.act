@@ -16,7 +16,7 @@ extension list[Characteristic] (yang.gen3.YangData):
     def take_list(self, schema: yang.schema.DList, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.gen3.PathElement]=[]) -> list[value]:
         return []
 
-    def take_leaf(self, root: yang.schema.DRoot, schema: yang.schema.DLeaf, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.gen3.PathElement]=[]) -> ?(t: str, val: ?value):
+    def take_leaf(self, root: yang.schema.DRoot, schema: yang.schema.DLeaf, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.gen3.PathElement]=[]) -> ?(op: ?str, t: str, val: ?value):
         if isinstance(self, list):
             for entry in self:
                 if isinstance(entry, Characteristic):
@@ -24,7 +24,9 @@ extension list[Characteristic] (yang.gen3.YangData):
                     if entry.name == name and leaf_value is not None:
                         new_path = path + [yang.gen3.PathElement(schema)]
                         if json_type_and_yang_type_match(entry.valueType, schema.type_.builtin_type):
-                            return yang.gen3.try_parse_json_value(leaf_value, schema, schema.type_, new_path, root)
+                            tv = yang.gen3.try_parse_json_value(leaf_value, schema, schema.type_, new_path, root)
+                            if tv is not None:
+                                return (op=None, t=tv.t, val=tv.val)
                         raise yang.gen3.YangValidationError(path, schema.type_, leaf_value)
 
     def take_leaflist(self, root: yang.schema.DRoot, schema: yang.schema.DLeafList, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.gen3.PathElement]=[]) -> list[(t: str, val: ?value)]:
