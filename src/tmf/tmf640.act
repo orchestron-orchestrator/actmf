@@ -10,10 +10,10 @@ from yang.identityref import Identityref, PartialIdentityref
 import yang.schema
 
 extension list[Characteristic] (yang.gen3.YangData):
-    def take_container(self, schema: yang.schema.DContainer, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.gen3.PathElement]=[]) -> ?value:
+    def take_container(self, schema: yang.schema.DContainer, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.gen3.PathElement]=[]) -> ?(op: ?str, val: ?value):
         return None
 
-    def take_list(self, schema: yang.schema.DList, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.gen3.PathElement]=[]) -> list[value]:
+    def take_list(self, schema: yang.schema.DList, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.gen3.PathElement]=[]) -> list[(op: ?str, key: dict[str, value], val: value)]:
         return []
 
     def take_leaf(self, root: yang.schema.DRoot, schema: yang.schema.DLeaf, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.gen3.PathElement]=[]) -> ?(op: ?str, t: str, val: ?value):
@@ -29,7 +29,7 @@ extension list[Characteristic] (yang.gen3.YangData):
                                 return (op=None, t=tv.t, val=tv.val)
                         raise yang.gen3.YangValidationError(path, schema.type_, leaf_value)
 
-    def take_leaflist(self, root: yang.schema.DRoot, schema: yang.schema.DLeafList, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.gen3.PathElement]=[]) -> list[(t: str, val: ?value)]:
+    def take_leaflist(self, root: yang.schema.DRoot, schema: yang.schema.DLeafList, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.gen3.PathElement]=[]) -> list[(op: ?str, t: str, val: ?value)]:
         if isinstance(self, list):
             for entry in self:
                 if isinstance(entry, Characteristic):
@@ -39,11 +39,11 @@ extension list[Characteristic] (yang.gen3.YangData):
                         if json_type_and_yang_type_match(entry_value_type[:-5] if entry_value_type.endswith("Array") else entry_value_type, schema.type_.builtin_type):
                             if isinstance(leaflist_data, list):
                                 new_path = path + [yang.gen3.PathElement(schema)]
-                                values: list[(t: str, val: ?value)] = []
+                                values: list[(op: ?str, t: str, val: ?value)] = []
                                 for item in leaflist_data:
                                     tv = yang.gen3.try_parse_json_value(item, schema, schema.type_, new_path, root)
                                     if tv is not None:
-                                        values.append(tv)
+                                        values.append((op=None, t=tv.t, val=tv.val))
                                 return values
                         raise yang.gen3.YangValidationError(path, schema.type_, leaflist_data)
         return []
