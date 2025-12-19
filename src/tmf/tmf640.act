@@ -53,20 +53,23 @@ extension list[Characteristic] (yang.gen3.YangData):
                         raise yang.gen3.YangValidationError(path, schema.type_, leaflist_data)
         return []
 
-def _get_service_json(layer_config: yang.gdata.Node, service_id: ?str = None) -> ?value:
+def _get_service_json(layer_config: yang.gdata.Node, top_schema: yang.schema.DRoot, service_id: ?str = None) -> ?value:
     multiple = service_id is None
     services_json = []
 
     services = layer_config.children[_q("tmf-store")].children[_q("tmf640")].children[_q("service")]
     if isinstance(services, yang.gdata.List):
         for s in services.elements:
+            schema = top_schema
             sid = get_child_str(s, _q("id"))
             if not multiple and service_id != sid:
                 continue
             service = Service.from_gdata(s)
             config = layer_config
             for path_element in sid.split(".")[:-1]:
-                fqname = yang.gdata.Id(_NS_TMF, path_element.split("(")[0])
+                # TODO: include namespace qualifier in service id path (like in JSON, module name)
+                schema = schema.get(path_element.split("(")[0])
+                fqname = yang.gen3._fqname(schema)
                 if "(" in path_element:
                     config = config.children[fqname]
                     key = path_element.split("(")[1].split(")")[0]
@@ -79,7 +82,8 @@ def _get_service_json(layer_config: yang.gdata.Node, service_id: ?str = None) ->
                     config = config.children[fqname]
 
             last_path_element = sid.split(".")[-1]
-            fqname = yang.gdata.Id(_NS_TMF, last_path_element.split("(")[0])
+            schema = schema.get(last_path_element.split("(")[0])
+            fqname = yang.gen3._fqname(schema)
             config = config.children[fqname]
             if isinstance(config, yang.gdata.List):
                 if multiple:
@@ -95,14 +99,14 @@ def _get_service_json(layer_config: yang.gdata.Node, service_id: ?str = None) ->
     if multiple:
         return services_json
 
-def get_service_json(layer_config: yang.gdata.Node, service_id: str) -> ?dict[str, ?value]:
-    service = _get_service_json(layer_config, service_id)
+def get_service_json(layer_config: yang.gdata.Node, top_schema: yang.schema.DRoot, service_id: str) -> ?dict[str, ?value]:
+    service = _get_service_json(layer_config, top_schema, service_id)
     if service is not None:
         if isinstance(service, dict):
             return service
 
-def get_service_list_json(layer_config: yang.gdata.Node) -> list[dict[str, ?value]]:
-    services = _get_service_json(layer_config)
+def get_service_list_json(layer_config: yang.gdata.Node, top_schema: yang.schema.DRoot) -> list[dict[str, ?value]]:
+    services = _get_service_json(layer_config, top_schema)
     if services is not None:
         if isinstance(services, list):
             return services
@@ -2347,6 +2351,22 @@ def _test_json_to_gdata_netinfra_router():
     return gd.prsrc()
 
 def _test_get_json_netinfra_router():
+    yang_schema = r"""module netinfra {
+    yang-version "1.1";
+    namespace "http://example.com/netinfra";
+    prefix "ni";
+
+    container netinfra {
+        list router {
+            key "name";
+            leaf name {
+                type string;
+            }
+        }
+    }
+}
+    """
+    top_schema = yang.compile([yang_schema])
     layer_config = yang.gdata.Container({
         yang.gdata.Id("http://example.com/netinfra", "netinfra"): yang.gdata.Container({
             yang.gdata.Id("http://example.com/netinfra", "router"): yang.gdata.List(
@@ -2408,7 +2428,7 @@ def _test_get_json_netinfra_router():
             }, ns=_NS_TMF, module='orchestron-tmf')
         })
     })
-    data = get_service_list_json(layer_config)
+    data = get_service_list_json(layer_config, top_schema)
     return json.encode_list(data, pretty=True)
 
 def _test_json_to_gdata_edge_device_access_interface():
@@ -2593,6 +2613,37 @@ def _test_json_to_gdata_edge_device_access_interface_vlan():
     return gd.prsrc()
 
 def _test_get_json_edge_device_access_interface_vlan():
+    yang_schema = r"""module edge {
+  namespace "http://example.com/edge";
+  prefix edge;
+
+    list edge-device {
+        key "device-name";
+        leaf device-name {
+            type string;
+            description "Name of the edge device";
+        }
+        list access-interface {
+            key "interface-name";
+            leaf interface-name {
+                type string;
+                description "Name of the access interface";
+            }
+            leaf speed {
+                type int32;
+                description "Speed of the interface in Mbps";
+            }
+            list vlan {
+                key "vlan-id";
+                leaf vlan-id {
+                    type uint16;
+                    description "VLAN Identifier";
+                }
+            }
+        }
+    }
+}"""
+    top_schema = yang.compile([yang_schema])
     layer_config = yang.gdata.Container({
         yang.gdata.Id("http://example.com/edge", "edge-device"): yang.gdata.List(
             [yang.gdata.Id("http://example.com/edge", "device-name")],
@@ -2749,5 +2800,5 @@ def _test_get_json_edge_device_access_interface_vlan():
             }, ns=_NS_TMF, module='orchestron-tmf')
         })
     })
-    data = get_service_list_json(layer_config)
+    data = get_service_list_json(layer_config, top_schema)
     return json.encode_list(data, pretty=True)
