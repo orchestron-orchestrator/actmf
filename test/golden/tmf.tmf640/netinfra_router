@@ -1,9 +1,9 @@
 Container({
-  'test:netinfra': Container({
-    'router': List(['name'], elements=[
+  Id('http://example.com/test', 'netinfra'): Container({
+    Id('http://example.com/test', 'router'): List([Id('http://example.com/test', 'name')], ns='http://example.com/test', module='tst', elements=[
       Container({
-        'name': Leaf('ams-core-1')
+        Id('http://example.com/test', 'name'): Leaf('ams-core-1')
       })
     ])
-  })
+  }, ns='http://example.com/test', module='tst')
 })
