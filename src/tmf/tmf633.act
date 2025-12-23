@@ -1,7 +1,7 @@
 import json
 import testing
 
-import tmf.tmf640
+import tmf.cfs
 import yang
 import yang.gdata
 import yang.gen3
@@ -56,7 +56,8 @@ def get_service_catalog_list_json() -> list[dict[str, ?value]]:
             return catalogs
     return []
 
-def _get_service_category_json(tmf_spec: dict[str, (name: str, description: str)], category_id: ?str = None) -> ?value:
+def _get_service_category_json(top_schema: yang.schema.DRoot, category_id: ?str = None) -> ?value:
+    tmf_spec = tmf.cfs.services_from_schema(top_schema)
     multiple = category_id is None
     if not multiple and category_id != "default":
         return None
@@ -95,20 +96,22 @@ def _get_service_category_json(tmf_spec: dict[str, (name: str, description: str)
 
         return [category.to_json()] if multiple else category.to_json()
 
-def get_service_category_json(tmf_spec: dict[str, (name: str, description: str)], category_id: str) -> ?dict[str, ?value]:
-    category = _get_service_category_json(tmf_spec, category_id)
+def get_service_category_json(top_schema: yang.schema.DRoot, category_id: str) -> ?dict[str, ?value]:
+    category = _get_service_category_json(top_schema, category_id)
     if category is not None:
         if isinstance(category, dict):
             return category
+    return None
 
-def get_service_category_list_json(tmf_spec: dict[str, (name: str, description: str)]) -> list[dict[str, ?value]]:
-    categories = _get_service_category_json(tmf_spec)
+def get_service_category_list_json(top_schema: yang.schema.DRoot) -> list[dict[str, ?value]]:
+    categories = _get_service_category_json(top_schema)
     if categories is not None:
         if isinstance(categories, list):
             return categories
     return []
 
-def _get_service_candidate_json(tmf_spec: dict[str, (name: str, description: str)], candidate_id: ?str = None) -> ?value:
+def _get_service_candidate_json(top_schema: yang.schema.DRoot, candidate_id: ?str = None) -> ?value:
+    tmf_spec = tmf.cfs.services_from_schema(top_schema)
     multiple = candidate_id is None
     candidates_json = []
 
@@ -161,20 +164,22 @@ def _get_service_candidate_json(tmf_spec: dict[str, (name: str, description: str
     if multiple:
         return candidates_json
 
-def get_service_candidate_json(tmf_spec: dict[str, (name: str, description: str)], candidate_id: str) -> ?dict[str, ?value]:
-    candidate = _get_service_candidate_json(tmf_spec, candidate_id)
+def get_service_candidate_json(top_schema: yang.schema.DRoot, candidate_id: str) -> ?dict[str, ?value]:
+    candidate = _get_service_candidate_json(top_schema, candidate_id)
     if candidate is not None:
         if isinstance(candidate, dict):
             return candidate
+    return None
 
-def get_service_candidate_list_json(tmf_spec: dict[str, (name: str, description: str)]) -> list[dict[str, ?value]]:
-    candidates = _get_service_candidate_json(tmf_spec)
+def get_service_candidate_list_json(top_schema: yang.schema.DRoot) -> list[dict[str, ?value]]:
+    candidates = _get_service_candidate_json(top_schema)
     if candidates is not None:
         if isinstance(candidates, list):
             return candidates
     return []
 
-def _get_service_specification_json(tmf_spec: dict[str, (name: str, description: str)], top_schema: yang.schema.DRoot, sspec_id: ?str = None) -> ?value:
+def _get_service_specification_json(top_schema: yang.schema.DRoot, sspec_id: ?str = None) -> ?value:
+    tmf_spec = tmf.cfs.services_from_schema(top_schema)
     multiple = sspec_id is None
     sspecs_json = []
 
@@ -228,7 +233,7 @@ def _get_service_specification_json(tmf_spec: dict[str, (name: str, description:
                         minCardinality=1 if child.name in schema.key or child.mandatory else 0,
                         name=child.name,
                         regex=patterns[0].get_yang_regex() if patterns else None,  # TODO: What regex flavor does TMF expect?
-                        valueType=tmf.tmf640.yang_type_to_tmf_type(child_type.builtin_type),
+                        valueType=tmf.cfs.yang_type_to_tmf_type(child_type.builtin_type),
                         charSpecRelationship=[],
                         characteristicValueSpecification=[],
                         validFor=TimePeriod(
@@ -260,7 +265,7 @@ def _get_service_specification_json(tmf_spec: dict[str, (name: str, description:
                         spec_characteristic.characteristicValueSpecification.append(
                             CharacteristicValueSpecification(
                                 value=child.default,
-                                valueType=tmf.tmf640.yang_type_to_tmf_type(child_type.builtin_type),
+                                valueType=tmf.cfs.yang_type_to_tmf_type(child_type.builtin_type),
                                 isDefault=True,
                                 validFor=TimePeriod(
                                     endDateTime=None,
@@ -285,7 +290,7 @@ def _get_service_specification_json(tmf_spec: dict[str, (name: str, description:
                         minCardinality=child.min_elements or 1 if child.name in schema.key else 0,
                         name=child.name,
                         regex=patterns[0].get_yang_regex() if patterns else None,  # TODO: What regex flavor does TMF expect?
-                        valueType="{tmf.tmf640.yang_type_to_tmf_type(child_type.builtin_type)}Array",
+                        valueType="{tmf.cfs.yang_type_to_tmf_type(child_type.builtin_type)}Array",
                         charSpecRelationship=[],
                         characteristicValueSpecification=[],
                         validFor=TimePeriod(
@@ -319,7 +324,7 @@ def _get_service_specification_json(tmf_spec: dict[str, (name: str, description:
                             spec_characteristic.characteristicValueSpecification.append(
                                 CharacteristicValueSpecification(
                                     value=default_value,
-                                    valueType=tmf.tmf640.yang_type_to_tmf_type(child_type.builtin_type),
+                                    valueType=tmf.cfs.yang_type_to_tmf_type(child_type.builtin_type),
                                     isDefault=True,
                                     validFor=TimePeriod(
                                         endDateTime=None,
@@ -340,14 +345,15 @@ def _get_service_specification_json(tmf_spec: dict[str, (name: str, description:
     if multiple:
         return sspecs_json
 
-def get_service_specification_json(tmf_spec: dict[str, (name: str, description: str)], top_schema: yang.schema.DRoot, sspec_id: str) -> ?dict[str, ?value]:
-    sspec = _get_service_specification_json(tmf_spec, top_schema, sspec_id)
+def get_service_specification_json(top_schema: yang.schema.DRoot, sspec_id: str) -> ?dict[str, ?value]:
+    sspec = _get_service_specification_json(top_schema, sspec_id)
     if sspec is not None:
         if isinstance(sspec, dict):
             return sspec
+    return None
 
-def get_service_specification_list_json(tmf_spec: dict[str, (name: str, description: str)], top_schema: yang.schema.DRoot) -> list[dict[str, ?value]]:
-    sspecs = _get_service_specification_json(tmf_spec, top_schema)
+def get_service_specification_list_json(top_schema: yang.schema.DRoot) -> list[dict[str, ?value]]:
+    sspecs = _get_service_specification_json(top_schema)
     if sspecs is not None:
         if isinstance(sspecs, list):
             return sspecs
@@ -1234,36 +1240,48 @@ def _test_service_catalog_json():
     return json.encode_list(data, pretty=True)
 
 def _test_service_category_json():
-    tmf_spec = {
-        "netinfra.router": (
-            name="Router",
-            description="Network Infrastructure Router"
-        ),
+    yang_schema = r"""module netinfra {
+  namespace "http://example.com/netinfra";
+  prefix netinfra;
+
+    container netinfra {
+        list router {
+            key "name";
+            orchestron:tmf-cfs "Router";
+            description "Network Infrastructure Router";
+            leaf name {
+                type string;
+                description "Name of the router";
+            }
+        }
     }
-    data = get_service_category_list_json(tmf_spec)
+}"""
+    top_schema = yang.compile([yang_schema])
+    data = get_service_category_list_json(top_schema)
     return json.encode_list(data, pretty=True)
 
 def _test_service_candidate_json():
-    tmf_spec = {
-        "netinfra.router": (
-            name="Router",
-            description="Network Infrastructure Router"
-        ),
+    yang_schema = r"""module netinfra {
+  namespace "http://example.com/netinfra";
+  prefix netinfra;
+
+    container netinfra {
+        list router {
+            description "Network Infrastructure Router";
+            key "name";
+            orchestron:tmf-cfs "Router";
+            leaf name {
+                type string;
+                description "Name of the router";
+            }
+        }
     }
-    data = get_service_candidate_list_json(tmf_spec)
+}"""
+    top_schema = yang.compile([yang_schema])
+    data = get_service_candidate_list_json(top_schema)
     return json.encode_list(data, pretty=True)
 
 def _test_service_specification_json():
-    tmf_spec = {
-        "netinfra.router": (
-            name="Router",
-            description="Network Infrastructure Router"
-        ),
-        "edge-device.access-interface": (
-            name="Access Interface",
-            description="Access Interface of Edge Device"
-        )
-    }
     netinfra_schema = r"""module netinfra {
   namespace "http://example.com/netinfra";
   prefix netinfra;
@@ -1271,6 +1289,8 @@ def _test_service_specification_json():
     container netinfra {
         list router {
             key "name";
+            orchestron:tmf-cfs "Router";
+            description "Network Infrastructure Router";
             leaf name {
                 type string;
                 description "Name of the router";
@@ -1311,6 +1331,8 @@ def _test_service_specification_json():
         }
         list access-interface {
             key "interface-name";
+            description "Access Interface of Edge Device";
+            orchestron:tmf-cfs "Access Interface";
             leaf interface-name {
                 type string;
                 description "Name of the access interface";
@@ -1323,5 +1345,5 @@ def _test_service_specification_json():
     }
 }"""
     top_schema = yang.compile([netinfra_schema, edge_schema])
-    data = get_service_specification_list_json(tmf_spec, top_schema)
+    data = get_service_specification_list_json(top_schema)
     return json.encode_list(data, pretty=True)

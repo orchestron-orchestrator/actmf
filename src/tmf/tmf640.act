@@ -9,6 +9,8 @@ import yang.gen3
 from yang.identityref import Identityref, PartialIdentityref
 import yang.schema
 
+import tmf.cfs
+
 _NS_TMF = "http://orchestron.org/yang/orchestron-tmf"
 def _q(n):
     return yang.gdata.Id(_NS_TMF, n)
@@ -28,7 +30,7 @@ extension list[Characteristic] (yang.gen3.YangData):
                     leaf_value = entry.value
                     if entry.name == name and leaf_value is not None:
                         new_path = path + [yang.gen3.PathElement(schema)]
-                        if json_type_and_yang_type_match(entry.valueType, schema.type_.builtin_type):
+                        if tmf.cfs.json_type_and_yang_type_match(entry.valueType, schema.type_.builtin_type):
                             tv = yang.gen3.try_parse_json_value(leaf_value, schema, schema.type_, new_path, root)
                             if tv is not None:
                                 return (op=None, t=tv.t, val=tv.val)
@@ -41,7 +43,7 @@ extension list[Characteristic] (yang.gen3.YangData):
                     leaflist_data = entry.value
                     entry_value_type = entry.valueType
                     if entry.name == name and leaflist_data is not None and entry_value_type is not None:
-                        if json_type_and_yang_type_match(entry_value_type[:-5] if entry_value_type.endswith("Array") else entry_value_type, schema.type_.builtin_type):
+                        if tmf.cfs.json_type_and_yang_type_match(entry_value_type[:-5] if entry_value_type.endswith("Array") else entry_value_type, schema.type_.builtin_type):
                             if isinstance(leaflist_data, list):
                                 new_path = path + [yang.gen3.PathElement(schema)]
                                 values: list[(op: ?str, t: str, val: ?value)] = []
@@ -180,7 +182,8 @@ def find_supporting_service_by_path(service: ?object, path: str) -> ?ServiceRefO
                 return ss
             return find_supporting_service_by_path(ss, path)
 
-def json_to_gdata(tmf_spec: dict[str, (name: str, description: str)], data: dict[str, ?value], top_schema: yang.schema.DRoot) -> (yang.gdata.Node, str):
+def json_to_gdata(data: dict[str, ?value], top_schema: yang.schema.DRoot) -> (yang.gdata.Node, str):
+    tmf_spec = tmf.cfs.services_from_schema(top_schema)
     service = Service.from_json(data)
     if service.serviceSpecification.id not in tmf_spec:
         raise ValueError("Invalid service specification {service.serviceSpecification.id}")
@@ -229,52 +232,13 @@ def json_to_gdata(tmf_spec: dict[str, (name: str, description: str)], data: dict
 
     return (ret, aggregate_tmf_id)
 
-def yang_type_to_tmf_type(yt: str) -> str:
-    if yt == "boolean":
-        return "boolean"
-    elif yt == "string":
-        return "string"
-    elif yt in ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"]:
-        return "integer"
-    elif yt == "decimal64":
-        return "number"
-    elif yt == "enumeration":
-        return "string"
-    raise ValueError("Unsupported YANG type: %s" % yt)
-
-def gdata_type_to_tmf_type(v: value) -> str:
-    if isinstance(v, bool):
-        return "boolean"
-    elif isinstance(v, str):
-        return "string"
-    elif isinstance(v, bigint):
-        return "integer"
-    elif isinstance(v, float):
-        return "number"
-    elif isinstance (v, list):
-        return gdata_type_to_tmf_type(v[0])
-    raise ValueError("Unsupported GDATA type: {type(v)}")
-
-def json_type_and_yang_type_match(jt: ?str, yt: ?str) -> bool:
-    if jt == "boolean" and yt == "boolean":
-        return True
-    elif jt == "string" and yt == "string":
-        return True
-    elif jt == "integer" and yt in ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"]:
-        return True
-    elif jt == "number" and yt == "decimal64":
-        return True
-    elif jt == "string" and yt == "enumeration":
-        return True
-    return False
-
 def add_leaf_properties_to_service_characteristics(gd: yang.gdata.Node, service: Service) -> None:
     if isinstance(gd, yang.gdata.Container):
         for k, v in gd.children.items():
             if isinstance(v, yang.gdata.Leaf):
                 for chr in service.serviceCharacteristic:
                     if chr.name == k.name:
-                        chr.valueType = gdata_type_to_tmf_type(v.val)
+                        chr.valueType = tmf.cfs.gdata_type_to_tmf_type(v.val)
                         #FIXME: JSON encoder does not support bigint, convert to int
                         val = v.val
                         chr.value = int(val) if isinstance(val, bigint) else val
@@ -282,7 +246,7 @@ def add_leaf_properties_to_service_characteristics(gd: yang.gdata.Node, service:
             elif isinstance(v, yang.gdata.LeafList):
                 for chr in service.serviceCharacteristic:
                     if chr.name == k.name:
-                        chr.valueType = "{gdata_type_to_tmf_type(v.vals)}Array"
+                        chr.valueType = "{tmf.cfs.gdata_type_to_tmf_type(v.vals)}Array"
                         #FIXME: JSON encoder does not support bigint, convert to int
                         chr.value = [int(item) if isinstance(item, bigint) else item for item in v.vals]
                         break
@@ -2307,12 +2271,6 @@ def _test_characteristic_enumeration():
     return gd.prsrc()
 
 def _test_json_to_gdata_netinfra_router():
-    tmf_spec = {
-        "netinfra.router": (
-            name="Router",
-            description="Network Infrastructure Router"
-        ),
-    }
     json_data = {
         "serviceCharacteristic": [
             {
@@ -2334,6 +2292,7 @@ def _test_json_to_gdata_netinfra_router():
     container netinfra {
         list router {
             key "name";
+            orchestron:tmf-cfs "Router";
             leaf name {
                 type string;
             }
@@ -2342,7 +2301,7 @@ def _test_json_to_gdata_netinfra_router():
 }
     """
     top_schema = yang.compile([yang_schema])
-    gd, _ = json_to_gdata(tmf_spec, json_data, top_schema)
+    gd, _ = json_to_gdata(json_data, top_schema)
     services = gd.children[_q("tmf-store")].children[_q("tmf640")].children[_q("service")]
     if isinstance(services, yang.gdata.List):
         for s in services.elements:
@@ -2432,16 +2391,6 @@ def _test_get_json_netinfra_router():
     return json.encode_list(data, pretty=True)
 
 def _test_json_to_gdata_edge_device_access_interface():
-    tmf_spec = {
-        "edge-device": (
-            name="Edge Device",
-            description="Edge Device"
-        ),
-        "edge-device.access-interface": (
-            name="Access Interface",
-            description="Access Interface of Edge Device"
-        ),
-    }
     json_data = {
         "serviceCharacteristic": [
             {
@@ -2482,12 +2431,14 @@ def _test_json_to_gdata_edge_device_access_interface():
 
     list edge-device {
         key "device-name";
+        orchestron:tmf-cfs "Edge Device";
         leaf device-name {
             type string;
             description "Name of the edge device";
         }
         list access-interface {
             key "interface-name";
+            orchestron:tmf-cfs "Access Interface";
             leaf interface-name {
                 type string;
                 description "Name of the access interface";
@@ -2500,7 +2451,7 @@ def _test_json_to_gdata_edge_device_access_interface():
     }
 }"""
     top_schema = yang.compile([yang_schema])
-    gd, _ = json_to_gdata(tmf_spec, json_data, top_schema)
+    gd, _ = json_to_gdata(json_data, top_schema)
     services = gd.children[_q("tmf-store")].children[_q("tmf640")].children[_q("service")]
     if isinstance(services, yang.gdata.List):
         for s in services.elements:
@@ -2509,20 +2460,6 @@ def _test_json_to_gdata_edge_device_access_interface():
     return gd.prsrc()
 
 def _test_json_to_gdata_edge_device_access_interface_vlan():
-    tmf_spec = {
-        "edge-device": (
-            name="Edge Device",
-            description="Edge Device"
-        ),
-        "edge-device.access-interface": (
-            name="Access Interface",
-            description="Access Interface of Edge Device"
-        ),
-        "edge-device.access-interface.vlan": (
-            name="VLAN",
-            description="VLAN Configuration of Access Interface"
-        ),
-    }
     json_data = {
         "serviceCharacteristic": [
             {
@@ -2579,12 +2516,14 @@ def _test_json_to_gdata_edge_device_access_interface_vlan():
 
     list edge-device {
         key "device-name";
+        orchestron:tmf-cfs "Edge Device";
         leaf device-name {
             type string;
             description "Name of the edge device";
         }
         list access-interface {
             key "interface-name";
+            orchestron:tmf-cfs "Access Interface";
             leaf interface-name {
                 type string;
                 description "Name of the access interface";
@@ -2595,6 +2534,7 @@ def _test_json_to_gdata_edge_device_access_interface_vlan():
             }
             list vlan {
                 key "vlan-id";
+                orchestron:tmf-cfs "VLAN";
                 leaf vlan-id {
                     type uint16;
                     description "VLAN Identifier";
@@ -2604,7 +2544,7 @@ def _test_json_to_gdata_edge_device_access_interface_vlan():
     }
 }"""
     top_schema = yang.compile([yang_schema])
-    gd, _ = json_to_gdata(tmf_spec, json_data, top_schema)
+    gd, _ = json_to_gdata(json_data, top_schema)
     services = gd.children[_q("tmf-store")].children[_q("tmf640")].children[_q("service")]
     if isinstance(services, yang.gdata.List):
         for s in services.elements:
