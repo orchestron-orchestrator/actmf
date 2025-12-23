@@ -1,0 +1,64 @@
+import yang.schema
+
+def services_from_schema(top_schema: yang.schema.DRoot) -> dict[str, (name: str, description: str)]:
+    """Extract TMF CFS services from compiled schema by walking the tree and finding orchestron:tmf-cfs extensions."""
+    result: dict[str, (name: str, description: str)] = {}
+    
+    def _walk_schema(node: yang.schema.DNode, path: list[str]) -> None:
+        if isinstance(node, yang.schema.DNodeInner):
+            # Check for tmf-cfs extension
+            for ext in node.exts:
+                if ext.prefix == "orchestron" and ext.name == "tmf-cfs":
+                    ext_arg = ext.arg
+                    if ext_arg is not None and len(path) > 0:
+                        path_key = ".".join(path)
+                        node_desc = node.description
+                        desc = node_desc if node_desc is not None else ""
+                        result[path_key] = (name=ext_arg, description=desc)
+            
+            for child in node.children:
+                if not isinstance(child, yang.schema.DLeaf):
+                    child_path = path + [child.name]
+                    _walk_schema(child, child_path)
+    
+    _walk_schema(top_schema, [])
+    return result
+
+def yang_type_to_tmf_type(yt: str) -> str:
+    if yt == "boolean":
+        return "boolean"
+    elif yt == "string":
+        return "string"
+    elif yt in ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"]:
+        return "integer"
+    elif yt == "decimal64":
+        return "number"
+    elif yt == "enumeration":
+        return "string"
+    raise ValueError("Unsupported YANG type: %s" % yt)
+
+def gdata_type_to_tmf_type(v: value) -> str:
+    if isinstance(v, bool):
+        return "boolean"
+    elif isinstance(v, str):
+        return "string"
+    elif isinstance(v, bigint):
+        return "integer"
+    elif isinstance(v, float):
+        return "number"
+    elif isinstance (v, list):
+        return gdata_type_to_tmf_type(v[0])
+    raise ValueError("Unsupported GDATA type: {type(v)}")
+
+def json_type_and_yang_type_match(jt: ?str, yt: ?str) -> bool:
+    if jt == "boolean" and yt == "boolean":
+        return True
+    elif jt == "string" and yt == "string":
+        return True
+    elif jt == "integer" and yt in ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"]:
+        return True
+    elif jt == "number" and yt == "decimal64":
+        return True
+    elif jt == "string" and yt == "enumeration":
+        return True
+    return False

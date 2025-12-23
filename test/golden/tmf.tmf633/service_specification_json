@@ -1,5 +1,77 @@
 [
     {
+        "id": "edge-device.access-interface",
+        "href": "/tmf-api/serviceCatalogManagement/v4/serviceSpecification/edge-device.access-interface",
+        "description": "Access Interface of Edge Device Service Specification",
+        "isBundle": false,
+        "lastUpdate": "2025-11-01T00:00:00",
+        "lifecycleStatus": "active",
+        "name": "Access Interface Service Specification",
+        "version": "2025-11-01",
+        "attachment": [],
+        "constraint": [],
+        "entitySpecRelationship": [],
+        "featureSpecification": [],
+        "relatedParty": [],
+        "resourceSpecification": [],
+        "serviceLevelSpecification": [],
+        "serviceSpecRelationship": [],
+        "specCharacteristic": [
+            {
+                "id": "interface-name",
+                "configurable": true,
+                "description": "Name of the access interface",
+                "extensible": false,
+                "isUnique": true,
+                "maxCardinality": 1,
+                "minCardinality": 1,
+                "name": "interface-name",
+                "regex": null,
+                "valueType": "string",
+                "charSpecRelationship": [],
+                "characteristicValueSpecification": [],
+                "validFor": {
+                    "endDateTime": null,
+                    "startDateTime": "1970-01-01T00:00:00"
+                },
+                "@baseType": "CharacteristicSpecification",
+                "@schemaLocation": "/tmf-api/schema/Service/CharacteristicSpecification.schema.json",
+                "@type": "CharacteristicSpecification",
+                "valueSchemaLocation": null
+            },
+            {
+                "id": "speed",
+                "configurable": true,
+                "description": "Speed of the interface in Mbps",
+                "extensible": false,
+                "isUnique": false,
+                "maxCardinality": 1,
+                "minCardinality": 0,
+                "name": "speed",
+                "regex": null,
+                "valueType": "integer",
+                "charSpecRelationship": [],
+                "characteristicValueSpecification": [],
+                "validFor": {
+                    "endDateTime": null,
+                    "startDateTime": "1970-01-01T00:00:00"
+                },
+                "@baseType": "CharacteristicSpecification",
+                "@schemaLocation": "/tmf-api/schema/Service/CharacteristicSpecification.schema.json",
+                "@type": "CharacteristicSpecification",
+                "valueSchemaLocation": null
+            }
+        ],
+        "targetEntitySchema": null,
+        "validFor": {
+            "endDateTime": null,
+            "startDateTime": "1970-01-01T00:00:00"
+        },
+        "@baseType": "ServiceSpecification",
+        "@schemaLocation": "/tmf-api/schema/Service/CustomerFacingServiceSpecification.schema.json",
+        "@type": "CustomerFacingServiceSpecification"
+    },
+    {
         "id": "netinfra.router",
         "href": "/tmf-api/serviceCatalogManagement/v4/serviceSpecification/netinfra.router",
         "description": "Network Infrastructure Router Service Specification",
@@ -168,78 +240,6 @@
                 "name": "qos-profiles",
                 "regex": null,
                 "valueType": "stringArray",
-                "charSpecRelationship": [],
-                "characteristicValueSpecification": [],
-                "validFor": {
-                    "endDateTime": null,
-                    "startDateTime": "1970-01-01T00:00:00"
-                },
-                "@baseType": "CharacteristicSpecification",
-                "@schemaLocation": "/tmf-api/schema/Service/CharacteristicSpecification.schema.json",
-                "@type": "CharacteristicSpecification",
-                "valueSchemaLocation": null
-            }
-        ],
-        "targetEntitySchema": null,
-        "validFor": {
-            "endDateTime": null,
-            "startDateTime": "1970-01-01T00:00:00"
-        },
-        "@baseType": "ServiceSpecification",
-        "@schemaLocation": "/tmf-api/schema/Service/CustomerFacingServiceSpecification.schema.json",
-        "@type": "CustomerFacingServiceSpecification"
-    },
-    {
-        "id": "edge-device.access-interface",
-        "href": "/tmf-api/serviceCatalogManagement/v4/serviceSpecification/edge-device.access-interface",
-        "description": "Access Interface of Edge Device Service Specification",
-        "isBundle": false,
-        "lastUpdate": "2025-11-01T00:00:00",
-        "lifecycleStatus": "active",
-        "name": "Access Interface Service Specification",
-        "version": "2025-11-01",
-        "attachment": [],
-        "constraint": [],
-        "entitySpecRelationship": [],
-        "featureSpecification": [],
-        "relatedParty": [],
-        "resourceSpecification": [],
-        "serviceLevelSpecification": [],
-        "serviceSpecRelationship": [],
-        "specCharacteristic": [
-            {
-                "id": "interface-name",
-                "configurable": true,
-                "description": "Name of the access interface",
-                "extensible": false,
-                "isUnique": true,
-                "maxCardinality": 1,
-                "minCardinality": 1,
-                "name": "interface-name",
-                "regex": null,
-                "valueType": "string",
-                "charSpecRelationship": [],
-                "characteristicValueSpecification": [],
-                "validFor": {
-                    "endDateTime": null,
-                    "startDateTime": "1970-01-01T00:00:00"
-                },
-                "@baseType": "CharacteristicSpecification",
-                "@schemaLocation": "/tmf-api/schema/Service/CharacteristicSpecification.schema.json",
-                "@type": "CharacteristicSpecification",
-                "valueSchemaLocation": null
-            },
-            {
-                "id": "speed",
-                "configurable": true,
-                "description": "Speed of the interface in Mbps",
-                "extensible": false,
-                "isUnique": false,
-                "maxCardinality": 1,
-                "minCardinality": 0,
-                "name": "speed",
-                "regex": null,
-                "valueType": "integer",
                 "charSpecRelationship": [],
                 "characteristicValueSpecification": [],
                 "validFor": {
