@@ -71,7 +71,7 @@ def _get_service_json(layer_config: yang.gdata.Node, top_schema: yang.schema.DRo
             for path_element in sid.split(".")[:-1]:
                 # TODO: include namespace qualifier in service id path (like in JSON, module name)
                 schema = schema.get(path_element.split("(")[0])
-                fqname = yang.gen3._fqname(schema)
+                fqname = yang.gen3.fqname(schema)
                 if "(" in path_element:
                     config = config.children[fqname]
                     key = path_element.split("(")[1].split(")")[0]
@@ -85,7 +85,7 @@ def _get_service_json(layer_config: yang.gdata.Node, top_schema: yang.schema.DRo
 
             last_path_element = sid.split(".")[-1]
             schema = schema.get(last_path_element.split("(")[0])
-            fqname = yang.gen3._fqname(schema)
+            fqname = yang.gen3.fqname(schema)
             config = config.children[fqname]
             if isinstance(config, yang.gdata.List):
                 if multiple:
@@ -199,14 +199,14 @@ def json_to_gdata(data: dict[str, ?value], top_schema: yang.schema.DRoot) -> (ya
         current_path = path_element if current_path == "" else "{current_path}.{path_element}"
         schema = schema.get(path_element)
         root_path.append("{schema.module}:{schema.name}")
-        fqname = yang.gen3._fqname(schema)
+        fqname = yang.gen3.fqname(schema)
         if isinstance(schema, yang.schema.DContainer):
             current_node.children[fqname] = yang.gdata.Container(ns=schema.namespace, module=schema.module)
             current_node = current_node.children[fqname]
             aggregate_tmf_id = "{aggregate_tmf_id}.{path_element}" if aggregate_tmf_id != "" else path_element
         elif isinstance(schema, yang.schema.DList):
             current_node.children[fqname] = yang.gdata.List(
-                yang.gen3._fq_list_keys(schema), [], ns=schema.namespace, module=schema.module)
+                yang.gen3.fq_list_keys(schema), [], ns=schema.namespace, module=schema.module)
             current_node = current_node.children[fqname]
         else:
             raise NotImplementedError(f"Unexpected GData class {schema.gname} in path resolution")
