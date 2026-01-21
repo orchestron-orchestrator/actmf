@@ -5,7 +5,7 @@ Container({
       Id('http://example.com/edge', 'access-interface'): List([Id('http://example.com/edge', 'interface-name')], ns='http://example.com/edge', module='edge', elements=[
         Container({
           Id('http://example.com/edge', 'interface-name'): Leaf('GigabitEthernet0/1'),
-          Id('http://example.com/edge', 'speed'): Leaf(bigint(1000))
+          Id('http://example.com/edge', 'speed'): Leaf(1000)
         })
       ])
     })

@@ -140,10 +140,12 @@ def get_key_value(gd: yang.gdata.Node, schema: yang.schema.DNode) -> str:
                 val = v.val
                 if isinstance(val, str):
                     return val
-                elif isinstance(val, bigint):
+                elif isinstance(val, int):
+                    return str(val)
+                elif isinstance(val, u64):
                     return str(val)
                 else:
-                    raise NotImplementedError(f"Service characteristic key {key} is of type {type(val)}, expected str or bigint")
+                    raise NotImplementedError(f"Service characteristic key {key} is of type {type(val)}, expected str, int or u64")
             else:
                 raise NotImplementedError(f"Service characteristic key {key} is of type {type(v)}, expected Leaf")
         except KeyError:
@@ -239,16 +241,13 @@ def add_leaf_properties_to_service_characteristics(gd: yang.gdata.Node, service:
                 for chr in service.serviceCharacteristic:
                     if chr.name == k.name:
                         chr.valueType = tmf.cfs.gdata_type_to_tmf_type(v.val)
-                        #FIXME: JSON encoder does not support bigint, convert to int
-                        val = v.val
-                        chr.value = int(val) if isinstance(val, bigint) else val
+                        chr.value = v.val
                         break
             elif isinstance(v, yang.gdata.LeafList):
                 for chr in service.serviceCharacteristic:
                     if chr.name == k.name:
                         chr.valueType = "{tmf.cfs.gdata_type_to_tmf_type(v.vals)}Array"
-                        #FIXME: JSON encoder does not support bigint, convert to int
-                        chr.value = [int(item) if isinstance(item, bigint) else item for item in v.vals]
+                        chr.value = v.vals
                         break
 
 def get_opt_obj(d: dict[str, ?value], key: str) -> ?dict[str, ?value]:
@@ -2595,12 +2594,12 @@ def _test_get_json_edge_device_access_interface_vlan():
                         ns='http://example.com/edge', module='edge', elements=[
                             yang.gdata.Container({
                                 yang.gdata.Id("http://example.com/edge", "interface-name"): yang.gdata.Leaf('GigabitEthernet0/1'),
-                                yang.gdata.Id("http://example.com/edge", "speed"): yang.gdata.Leaf(bigint(1000)),
+                                yang.gdata.Id("http://example.com/edge", "speed"): yang.gdata.Leaf(1000),
                                 yang.gdata.Id("http://example.com/edge", "vlan"): yang.gdata.List(
                                     [yang.gdata.Id("http://example.com/edge", "vlan-id")],
                                     ns='http://example.com/edge', module='edge', elements=[
                                         yang.gdata.Container({
-                                            yang.gdata.Id("http://example.com/edge", "vlan-id"): yang.gdata.Leaf(bigint(100))
+                                            yang.gdata.Id("http://example.com/edge", "vlan-id"): yang.gdata.Leaf(100)
                                         })
                                     ])
                             })
