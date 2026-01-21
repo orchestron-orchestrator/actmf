@@ -42,7 +42,9 @@ def gdata_type_to_tmf_type(v: value) -> str:
         return "boolean"
     elif isinstance(v, str):
         return "string"
-    elif isinstance(v, bigint):
+    elif isinstance(v, int):
+        return "integer"
+    elif isinstance(v, u64):
         return "integer"
     elif isinstance(v, float):
         return "number"
