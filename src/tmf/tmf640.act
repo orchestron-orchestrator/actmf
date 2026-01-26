@@ -5,7 +5,8 @@ import time
 
 import yang
 import yang.gdata
-import yang.gen3
+import yang.data
+import yang.json
 from yang.identityref import Identityref, PartialIdentityref
 import yang.schema
 
@@ -16,27 +17,27 @@ def _q(n):
     return yang.gdata.Id(_NS_TMF, n)
 
 
-extension list[Characteristic] (yang.gen3.YangData):
-    def take_container(self, schema: yang.schema.DContainer, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.gen3.PathElement]=[]) -> ?(op: ?str, val: ?value):
+extension list[Characteristic] (yang.data.YangData):
+    def take_container(self, schema: yang.schema.DContainer, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.data.PathElement]=[]) -> ?(op: ?str, val: ?value):
         return None
 
-    def take_list(self, schema: yang.schema.DList, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.gen3.PathElement]=[]) -> list[(op: ?str, key: dict[str, value], val: value)]:
+    def take_list(self, schema: yang.schema.DList, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.data.PathElement]=[]) -> list[(op: ?str, key: dict[str, value], val: value)]:
         return []
 
-    def take_leaf(self, root: yang.schema.DRoot, schema: yang.schema.DLeaf, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.gen3.PathElement]=[]) -> ?(op: ?str, t: str, val: ?value):
+    def take_leaf(self, root: yang.schema.DRoot, schema: yang.schema.DLeaf, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.data.PathElement]=[]) -> ?(op: ?str, t: str, val: ?value):
         if isinstance(self, list):
             for entry in self:
                 if isinstance(entry, Characteristic):
                     leaf_value = entry.value
                     if entry.name == name and leaf_value is not None:
-                        new_path = path + [yang.gen3.PathElement(schema)]
+                        new_path = path + [yang.data.PathElement(schema)]
                         if tmf.cfs.json_type_and_yang_type_match(entry.valueType, schema.type_.builtin_type):
-                            tv = yang.gen3.try_parse_json_value(leaf_value, schema, schema.type_, new_path, root)
+                            tv = yang.json.try_parse_json_value(leaf_value, schema, schema.type_, new_path, root)
                             if tv is not None:
                                 return (op=None, t=tv.t, val=tv.val)
-                        raise yang.gen3.YangValidationError(path, schema.type_, leaf_value)
+                        raise yang.data.YangValidationError(path, schema.type_, leaf_value)
 
-    def take_leaflist(self, root: yang.schema.DRoot, schema: yang.schema.DLeafList, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.gen3.PathElement]=[]) -> list[(op: ?str, t: str, val: ?value)]:
+    def take_leaflist(self, root: yang.schema.DRoot, schema: yang.schema.DLeafList, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.data.PathElement]=[]) -> list[(op: ?str, t: str, val: ?value)]:
         if isinstance(self, list):
             for entry in self:
                 if isinstance(entry, Characteristic):
@@ -45,15 +46,23 @@ extension list[Characteristic] (yang.gen3.YangData):
                     if entry.name == name and leaflist_data is not None and entry_value_type is not None:
                         if tmf.cfs.json_type_and_yang_type_match(entry_value_type[:-5] if entry_value_type.endswith("Array") else entry_value_type, schema.type_.builtin_type):
                             if isinstance(leaflist_data, list):
-                                new_path = path + [yang.gen3.PathElement(schema)]
+                                new_path = path + [yang.data.PathElement(schema)]
                                 values: list[(op: ?str, t: str, val: ?value)] = []
                                 for item in leaflist_data:
-                                    tv = yang.gen3.try_parse_json_value(item, schema, schema.type_, new_path, root)
+                                    tv = yang.json.try_parse_json_value(item, schema, schema.type_, new_path, root)
                                     if tv is not None:
                                         values.append((op=None, t=tv.t, val=tv.val))
                                 return values
-                        raise yang.gen3.YangValidationError(path, schema.type_, leaflist_data)
+                        raise yang.data.YangValidationError(path, schema.type_, leaflist_data)
         return []
+
+def from_characteristic(root: yang.schema.DRoot, data: list[Characteristic], loose: bool=False, root_path: list[str]=[]) -> yang.gdata.Container:
+    def type_narrower(v):
+        if isinstance(v, list):
+            return v
+        raise ValueError("Value is not a list: {type(v)}")
+
+    return yang.data.from_data(root, data, type_narrower, loose, root_path)
 
 def _get_service_json(layer_config: yang.gdata.Node, top_schema: yang.schema.DRoot, service_id: ?str = None) -> ?value:
     multiple = service_id is None
@@ -71,7 +80,7 @@ def _get_service_json(layer_config: yang.gdata.Node, top_schema: yang.schema.DRo
             for path_element in sid.split(".")[:-1]:
                 # TODO: include namespace qualifier in service id path (like in JSON, module name)
                 schema = schema.get(path_element.split("(")[0])
-                fqname = yang.gen3.fqname(schema)
+                fqname = yang.data.fqname(schema)
                 if "(" in path_element:
                     config = config.children[fqname]
                     key = path_element.split("(")[1].split(")")[0]
@@ -85,7 +94,7 @@ def _get_service_json(layer_config: yang.gdata.Node, top_schema: yang.schema.DRo
 
             last_path_element = sid.split(".")[-1]
             schema = schema.get(last_path_element.split("(")[0])
-            fqname = yang.gen3.fqname(schema)
+            fqname = yang.data.fqname(schema)
             config = config.children[fqname]
             if isinstance(config, yang.gdata.List):
                 if multiple:
@@ -201,28 +210,28 @@ def json_to_gdata(data: dict[str, ?value], top_schema: yang.schema.DRoot) -> (ya
         current_path = path_element if current_path == "" else "{current_path}.{path_element}"
         schema = schema.get(path_element)
         root_path.append("{schema.module}:{schema.name}")
-        fqname = yang.gen3.fqname(schema)
+        fqname = yang.data.fqname(schema)
         if isinstance(schema, yang.schema.DContainer):
             current_node.children[fqname] = yang.gdata.Container(ns=schema.namespace, module=schema.module)
             current_node = current_node.children[fqname]
             aggregate_tmf_id = "{aggregate_tmf_id}.{path_element}" if aggregate_tmf_id != "" else path_element
         elif isinstance(schema, yang.schema.DList):
             current_node.children[fqname] = yang.gdata.List(
-                yang.gen3.fq_list_keys(schema), [], ns=schema.namespace, module=schema.module)
+                yang.data.fq_list_keys(schema), [], ns=schema.namespace, module=schema.module)
             current_node = current_node.children[fqname]
         else:
             raise NotImplementedError(f"Unexpected GData class {schema.gname} in path resolution")
 
         ss = find_supporting_service_by_path(service, current_path)
         if ss is not None:
-            gd = yang.gen3.from_data(top_schema, ss.serviceCharacteristic, root_path=root_path)
+            gd = from_characteristic(top_schema, ss.serviceCharacteristic, root_path=root_path)
             if gd is not None:
                 if isinstance(current_node, yang.gdata.List):
                     current_node.elements.append(gd)
                 aggregate_tmf_id = add_key_properties_to_service(ss, gd, schema, aggregate_tmf_id, path_element)
                 current_node = gd
 
-    gd = yang.gen3.from_data(top_schema, service.serviceCharacteristic, root_path=root_path)
+    gd = from_characteristic(top_schema, service.serviceCharacteristic, root_path=root_path)
     if isinstance(current_node, yang.gdata.List):
         current_node.elements.append(gd)
 
@@ -2090,7 +2099,7 @@ def _test_netinfra_router():
 
     service = Service.from_json(test_tmf_payload)
     s = yang.compile([yang_schema])
-    gd = yang.gen3.from_data(s, service.serviceCharacteristic, root_path=["test:netinfra", "router"])
+    gd = from_characteristic(s, service.serviceCharacteristic, root_path=["test:netinfra", "router"])
     r = yang.gdata.Container({
         yang.gdata.Id("http://example.com/test", "netinfra"): yang.gdata.Container({
             yang.gdata.Id("http://example.com/test", "router"): yang.gdata.List(
@@ -2134,8 +2143,8 @@ def _test_characteristic_type_mismatch():
     service = Service.from_json(test_tmf_payload)
     s = yang.compile([yang_schema])
     try:
-        gd = yang.gen3.from_data(s, service.serviceCharacteristic)
-    except yang.gen3.YangValidationError as exc:
+        gd = from_characteristic(s, service.serviceCharacteristic)
+    except yang.data.YangValidationError as exc:
         testing.assertEqual("Invalid value at /: '415-275-7439' - expected int32 with range -2147483648..2147483647", str(exc), "Expected YangValidationError")
         return
     testing.error("Expected YangValidationError")
@@ -2170,7 +2179,7 @@ def _test_characteristic_number():
 
     service = Service.from_json(test_tmf_payload)
     s = yang.compile([yang_schema])
-    gd = yang.gen3.from_data(s, service.serviceCharacteristic)
+    gd = from_characteristic(s, service.serviceCharacteristic)
     return gd.prsrc()
 
 def _test_characteristic_integer():
@@ -2201,7 +2210,7 @@ def _test_characteristic_integer():
 
     service = Service.from_json(test_tmf_payload)
     s = yang.compile([yang_schema])
-    gd = yang.gen3.from_data(s, service.serviceCharacteristic)
+    gd = from_characteristic(s, service.serviceCharacteristic)
     return gd.prsrc()
 
 def _test_characteristic_boolean():
@@ -2232,7 +2241,7 @@ def _test_characteristic_boolean():
 
     service = Service.from_json(test_tmf_payload)
     s = yang.compile([yang_schema])
-    gd = yang.gen3.from_data(s, service.serviceCharacteristic)
+    gd = from_characteristic(s, service.serviceCharacteristic)
     return gd.prsrc()
 
 def _test_characteristic_enumeration():
@@ -2266,7 +2275,7 @@ def _test_characteristic_enumeration():
 
     service = Service.from_json(test_tmf_payload)
     s = yang.compile([yang_schema])
-    gd = yang.gen3.from_data(s, service.serviceCharacteristic)
+    gd = from_characteristic(s, service.serviceCharacteristic)
     return gd.prsrc()
 
 def _test_json_to_gdata_netinfra_router():
