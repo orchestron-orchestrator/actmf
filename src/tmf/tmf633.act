@@ -4,7 +4,6 @@ import testing
 import tmf.cfs
 import yang
 import yang.gdata
-import yang.gen3
 import yang.schema
 
 
