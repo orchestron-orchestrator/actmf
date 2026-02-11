@@ -1,3 +1,4 @@
+import yang.gdata
 import yang.schema
 
 def services_from_schema(top_schema: yang.schema.DRoot) -> dict[str, (name: str, description: str)]:
@@ -48,6 +49,8 @@ def gdata_type_to_tmf_type(v: value) -> str:
         return "integer"
     elif isinstance(v, float):
         return "number"
+    elif isinstance(v, yang.gdata.LeafListEntry):
+        return gdata_type_to_tmf_type(v.val)
     elif isinstance (v, list):
         return gdata_type_to_tmf_type(v[0])
     raise ValueError("Unsupported GDATA type: {type(v)}")
