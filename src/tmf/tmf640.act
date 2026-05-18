@@ -217,7 +217,7 @@ class FeatureYangData(object):
 
 
 extension FeatureYangData (yang.data.YangData):
-    def take_container(self, schema: yang.schema.DContainer, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.data.PathElement]=[]) -> ?(op: ?str, val: ?value):
+    def take_container(self, schema: yang.schema.DContainer, name: str, ns_qualified: bool, path: list[yang.data.PathElement]=[]) -> ?(op: ?str, val: ?value):
         feature = self._get_direct_feature(name)
         if feature is not None:
             feature_id = feature.id
@@ -225,7 +225,7 @@ extension FeatureYangData (yang.data.YangData):
                 return (op=None, val=FeatureYangData(feature_id, feature.featureCharacteristic, self.features))
         return None
 
-    def take_list(self, schema: yang.schema.DList, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.data.PathElement]=[]) -> list[(op: ?str, key: dict[str, value], val: value)]:
+    def take_list(self, schema: yang.schema.DList, name: str, ns_qualified: bool, path: list[yang.data.PathElement]=[]) -> list[(op: ?str, key: dict[str, value], val: value)]:
         direct_features = self._get_direct_list_features(name)
         list_entries: list[(op: ?str, key: dict[str, value], val: value)] = []
         for entry in direct_features:
@@ -234,7 +234,7 @@ extension FeatureYangData (yang.data.YangData):
             list_entries.append((op=None, key=entry.key, val=FeatureYangData(current_path_id, entry.feature.featureCharacteristic, self.features)))
         return list_entries
 
-    def take_leaf(self, root: yang.schema.DRoot, schema: yang.schema.DLeaf, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.data.PathElement]=[]) -> ?(op: ?str, t: str, val: ?value):
+    def take_leaf(self, root: yang.schema.DRoot, schema: yang.schema.DLeaf, name: str, ns_qualified: bool, path: list[yang.data.PathElement]=[]) -> ?(op: ?str, t: str, val: ?value):
         for entry in self.characteristics:
             leaf_value = entry.value
             if entry.name == name and leaf_value is not None:
@@ -246,7 +246,7 @@ extension FeatureYangData (yang.data.YangData):
                 raise yang.data.YangValidationError(path, schema.type_, leaf_value)
         return None
 
-    def take_leaflist(self, root: yang.schema.DRoot, schema: yang.schema.DLeafList, name: str, ns_qualified: bool, is_unique: bool, path: list[yang.data.PathElement]=[]) -> list[(op: ?str, t: str, val: ?value)]:
+    def take_leaflist(self, root: yang.schema.DRoot, schema: yang.schema.DLeafList, name: str, ns_qualified: bool, path: list[yang.data.PathElement]=[]) -> list[(op: ?str, t: str, val: ?value)]:
         for entry in self.characteristics:
             leaflist_data = entry.value
             entry_value_type = entry.valueType
